@@ -10,10 +10,6 @@
 #define CROP 1
 #define NOCROP 2
 
-
-// Likely the problem is in z-buffer
-// + very slow drawing, reconsided pix drawing procedure
-
 struct ver {
     double x,y,z;
     int *connect;
@@ -109,9 +105,7 @@ static void clear_surface (void) {
     cairo_destroy(cr);
 }
 
-/* Create a new surface of the appropriate size to store our scribbles */
 gboolean configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, gpointer data) {
-  printf("configuring\n");
     if (surface)
         cairo_surface_destroy (surface);
     canvas_width = gtk_widget_get_allocated_width(widget);
@@ -127,35 +121,20 @@ gboolean configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, gpointe
     return TRUE;
 }
 
-/* Redraw the screen from the surface. Note that the ::draw
- * signal receives a ready-to-be-used cairo_t that is already
- * clipped to only draw the exposed areas of the widget
- */
 gboolean draw_cb(GtkWidget *widget, cairo_t *cr, gpointer data) {
     cairo_set_source_surface (cr, surface, 0, 0);
     cairo_paint (cr);
     return FALSE;
 }
 
-/* Handle button press events by either drawing a rectangle
- * or clearing the surface, depending on which button was pressed.
- * The ::button-press signal handler receives a GdkEventButton
- * struct which contains this information.
- */
-
 gboolean button_press_event_cb (GtkWidget *widget, GdkEventButton *event, gpointer data) {
     return TRUE;
 }
 
 gboolean upload_button_clicked_cb (GtkWidget *widget, GdkEventButton *event, gpointer data) {
-  printf("got it button!\n");
     return TRUE;  
 }
 
-/* Handle motion events by continuing to draw if button 1 is
- * still held down. The ::motion-notify signal handler receives
- * a GdkEventMotion struct which contains this information.
- */
 gboolean motion_notify_event_cb (GtkWidget *widget, GdkEventMotion *event, gpointer data) {
     static double phi = 0, theta = 0;
     if (surface == NULL)
@@ -175,17 +154,21 @@ gboolean motion_notify_event_cb (GtkWidget *widget, GdkEventMotion *event, gpoin
     return TRUE;
 }
 
-void update()
-{
-    int i;
-    for (i = 0; i < (Xvp_range + 1) * (Yvp_range + 1); ++i)
-        if ( (zbuffer + i) != NULL)
-            *(zbuffer + i) = 20000;
-
+void on_window_destroy() {
+    if (surface)
+      cairo_surface_destroy (surface);
+    gtk_main_quit ();
 }
 
-void rotateHandler(GdkEventMotion *event, double *theta, double *phi)
-{
+void update() {
+    int i;
+    for (i = 0; i < (Xvp_range + 1) * (Yvp_range + 1); ++i) {
+        if ((zbuffer + i) != NULL)
+            *(zbuffer + i) = 20000;
+    }
+}
+
+void rotateHandler(GdkEventMotion *event, double *theta, double *phi) {
     static int prev_y = 0, prev_x = 0;
     static int ycountpos = 0, xcountpos = 0, xcountneg = 0, ycountneg = 0; 
     int x = event->x, y = event->y;
@@ -193,7 +176,6 @@ void rotateHandler(GdkEventMotion *event, double *theta, double *phi)
     prev_x = x; prev_y = y;
     if (dy > 0) ycountpos++; if (dy < 0) ycountneg++;
     if (dx > 0) xcountpos++; if (dx < 0) xcountneg++;
-
     if (ycountpos == 1) {
         *phi += 1;
         ycountpos = 0;
@@ -212,65 +194,10 @@ void rotateHandler(GdkEventMotion *event, double *theta, double *phi)
     }
 }
 
-static void close_window (void) {
-    if (surface)
-      cairo_surface_destroy (surface);
-    gtk_main_quit ();
-}
-
-static void activate (GtkApplication *app, gpointer user_data) {
-    // //GtkBuilder *gtkBuilder = gtk_builder_new();
-    // GtkBuilder *gtkBuilder = gtk_builder_new_from_file ("render.glade");
-    // //gtk_builder_add_from_file(gtkBuilder,"render.glade", NULL); 
-    // //gtk_builder_set_application(gtkBuilder, app);
-    // gtk_builder_connect_signals(gtkBuilder, NULL);
-
-    // GtkWidget *window = GTK_WIDGET(gtk_builder_get_object(gtkBuilder, "window1")); 
-    // GtkWidget *render_area = GTK_WIDGET(gtk_builder_get_object(gtkBuilder, "render_area")); 
-    // GtkWidget *upload_button = GTK_WIDGET(gtk_builder_get_object(gtkBuilder, "upload_button")); 
-    // g_object_unref(G_OBJECT(gtkBuilder));
-    // // GtkWidget *window = gtk_application_window_new(app);
-    // // gtk_window_set_default_size(GTK_WINDOW(window), 1000, 470);
-    // // gtk_window_set_title(GTK_WINDOW(window), "Drawing Area");
-
-    // // gtk_container_set_border_width(GTK_CONTAINER (window), 8);
-    // // GtkWidget *frame = gtk_frame_new(NULL);
-    // // gtk_frame_set_shadow_type (GTK_FRAME(frame), GTK_SHADOW_IN);
-    // // gtk_container_add (GTK_CONTAINER(window), frame);
-    // // GtkWidget *drawing_area = gtk_drawing_area_new();
-    // // gtk_widget_set_size_request(drawing_area, 100, 100);
-    // // gtk_container_add(GTK_CONTAINER(frame), drawing_area);
-
-
-    // g_signal_connect (window, "destroy", G_CALLBACK(close_window), NULL);
-    // g_signal_connect (render_area, "draw", G_CALLBACK (draw_cb), NULL);
-    // g_signal_connect (render_area,"configure-event", G_CALLBACK (configure_event_cb), NULL);
-    // g_signal_connect (render_area, "motion-notify-event", G_CALLBACK (motion_notify_event_cb), NULL);
-    // g_signal_connect (render_area, "button-press-event", G_CALLBACK (button_press_event_cb), NULL);
-    // g_signal_connect (upload_button, "button-press-event", G_CALLBACK(upload_button_press_event_cb), NULL);
-    // /* Ask to receive events the drawing area doesn't normally
-    //  * subscribe to. In particular, we need to ask for the
-    //  * button press and motion notify events that want to handle.
-    //  */
-    // gtk_widget_set_events (render_area, gtk_widget_get_events(render_area) | GDK_BUTTON_PRESS_MASK | GDK_POINTER_MOTION_MASK);
-    // gtk_widget_set_events (upload_button, gtk_widget_get_events(upload_button) | GDK_BUTTON_PRESS_MASK);
-    // gtk_widget_show_all (window);
-}
-
-int main (int argc, char **argv)
-{
-    // GtkApplication *app;
-    // int status;
-
+int main (int argc, char **argv) {
     testObj = (struct obj*)malloc(sizeof(struct obj));
     read_object("african_head.obj", testObj);
 
-    // app = gtk_application_new ("org.gtk.example", G_APPLICATION_FLAGS_NONE);
-    // g_signal_connect (app, "activate", G_CALLBACK (activate), NULL);
-    // status = g_application_run (G_APPLICATION (app), argc, argv);
-    // g_object_unref (app);
-
-    // return status;
     GtkBuilder      *builder; 
     GtkWidget       *window;
 
@@ -290,13 +217,8 @@ int main (int argc, char **argv)
     return 0;
 }
 
-void on_window_destroy()
-{
-    gtk_main_quit();
-}
 
-void read_object(char *filename, struct obj *object)
-{
+void read_object(char *filename, struct obj *object) {
     FILE *fpin;
     char string[100];
 
@@ -329,8 +251,7 @@ void read_object(char *filename, struct obj *object)
     fclose(fpin);
 }
 
-void ReadVertex(char *str, struct ver **fvertex, int *nvr)
-{
+void ReadVertex(char *str, struct ver **fvertex, int *nvr) {
     static double xmin = BIG, ymin = BIG, zmin = BIG, xmax = -BIG, ymax = -BIG, zmax = -BIG;
     char numx[15], numy[15], numz[15];
     int i = 1;
@@ -371,8 +292,7 @@ void ReadVertex(char *str, struct ver **fvertex, int *nvr)
     *nvr += 1;
 }
 
-void ReadFace(char *str, struct tr **triangle, int *ntr)
-{
+void ReadFace(char *str, struct tr **triangle, int *ntr) {
     char num[10], part[150][30];
     int j = 0, i = 2, k = 0, poly[30];
 
@@ -416,8 +336,7 @@ void ReadFace(char *str, struct tr **triangle, int *ntr)
     }
 }
 
-void VerInit(struct ver **vertex, int nvr)
-{   
+void VerInit(struct ver **vertex, int nvr) {   
     int i;
     *vertex = (struct ver*)malloc((nvr + 1) * sizeof(struct ver));
     for (i = 1; i <= nvr; ++i) {
@@ -426,8 +345,7 @@ void VerInit(struct ver **vertex, int nvr)
     }
 }
 
-void draw_obj(GdkPixbuf* buffer, struct obj *object, struct color C, double theta, double phi)
-{
+void draw_obj(GdkPixbuf* buffer, struct obj *object, struct color C, double theta, double phi) {
     struct ver **fvertex = &(object->fvertex);
     struct ver **vertex = &(object->vertex);
     int nvr = object->nvr;
@@ -436,17 +354,9 @@ void draw_obj(GdkPixbuf* buffer, struct obj *object, struct color C, double thet
     int ntr = object->ntr;
 
     double Range[4] = {BIG, -BIG, BIG, -BIG};
-  //clock_t begin = clock();
     coeff(3000.0, theta, phi);
-  //clock_t end = clock();
-  //double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-  //printf("%f spent on recouting coefficients\n", time_spent);
 
-  //begin = clock();
     CalcVertex(*fvertex, vertex, nvr, Range);
-  //end = clock();
-  //time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-  //printf("%f spent on CalcVertex routine\n", time_spent);
 
     if (onetime) {
         scale_calc(Range[0], Range[1], Range[2], Range[3]);
@@ -454,19 +364,14 @@ void draw_obj(GdkPixbuf* buffer, struct obj *object, struct color C, double thet
     }
     onetime = 0;
 
-  //begin = clock();
     CalcTr(*vertex, triangle, ntr, nvr);
-  //end = clock();
-  //time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-  //printf("%f spent on CaltTr routine\n", time_spent);
         /* Считаем нормали к вершинам*/
        //extraCalcVertex(vertex, nvr, *triangle);
 
     DrawTr(*triangle, ntr, *vertex, C);
 }
 
-void coeff(double rho, double theta, double phi)
-{
+void coeff(double rho, double theta, double phi) {
     double th, ph, costh, sinth, cosph, sinph, factor;
 
     factor = atan(1.0) / 45.0;
@@ -480,8 +385,7 @@ void coeff(double rho, double theta, double phi)
                                         v43 = rho;
 }
 
-void scale_calc(double Xmin, double Xmax, double Ymin, double Ymax)
-{
+void scale_calc(double Xmin, double Xmax, double Ymin, double Ymax) {
     double fx, fy, Xcentre, Ycentre, Xvp_centre, Yvp_centre;
     double Xrange, Yrange;
 
@@ -494,8 +398,7 @@ void scale_calc(double Xmin, double Xmax, double Ymin, double Ymax)
     c1 = Xvp_centre - d * Xcentre; c2 = Yvp_centre - d * Ycentre;
 }
 
-void CalcVertex(struct ver* fvertex, struct ver** vertex, int nvr, double *Range)
-{
+void CalcVertex(struct ver* fvertex, struct ver** vertex, int nvr, double *Range) {
     int i;
     double x, y, z, xe, ye, ze, X, Y;
     double xO = fvertex[0].x, yO = fvertex[0].y, zO = fvertex[0].z;
@@ -520,7 +423,6 @@ void CalcVertex(struct ver* fvertex, struct ver** vertex, int nvr, double *Range
 }
 
 void extra_init() {
-
     int i;
     zbuffer = (int *)malloc((Xvp_range + 1) * (Yvp_range + 1) * sizeof(int));
     for (i = 0; i < (Xvp_range + 1) * (Yvp_range + 1); ++i)
@@ -596,8 +498,7 @@ void DrawTr(struct tr* triangle, int ntr, struct ver* vertex, struct color Cl) {
     }
 }
 
-void rast_line(struct v2D A, struct v2D B, struct v2D C, struct color Cl)
-{
+void rast_line(struct v2D A, struct v2D B, struct v2D C, struct color Cl) {
     line(A.x, A.y, B.x, B.y, Cl, CROP); line(B.x, B.y, C.x, C.y, Cl, CROP); line(C.x, C.y, A.x, A.y, Cl, CROP);
 }
 
@@ -674,8 +575,7 @@ void swap(double *x, double *y) {
     *y = aux;
 }
 
-void line(int x0, int y0, int x1, int y1, struct color Cl, int flag)
-{
+void line(int x0, int y0, int x1, int y1, struct color Cl, int flag) {
     int steep = 0;
     if (abs(x0 - x1) < abs(y0 - y1)) {
         swapI(&x0, &y0);
