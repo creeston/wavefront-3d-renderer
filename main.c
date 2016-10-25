@@ -6,10 +6,6 @@
 #include <time.h>
 /* Surface to store current scribbles */
 #define BIG 1e30
-#define Xvp_min 5
-#define Xvp_max 605
-#define Yvp_min 5
-#define Yvp_max 605
 #define sqr(x) ((x)*(x))
 #define CROP 1
 #define NOCROP 2
@@ -84,6 +80,8 @@ void on_window_destroy();
 gboolean motion_notify_event_cb (GtkWidget *widget, GdkEventMotion *event, gpointer data);
 gboolean button_press_event_cb (GtkWidget *widget, GdkEventButton *event, gpointer data);
 gboolean upload_button_clicked_cb (GtkWidget *widget, GdkEventButton *event, gpointer data);
+gboolean configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, gpointer data);
+gboolean draw_cb(GtkWidget *widget, cairo_t *cr, gpointer data);
 
 double v11, v12, v13, v21, v22, v23, v32, v33, v43, d, c1, c2, onetime = 1, Xvp_range, Yvp_range;
 double eps = 1.e-5, meps = -1.e-5, oneminus = 1 - 1.e-5, oneplus = 1 + 1.e-5;
@@ -93,7 +91,8 @@ static cairo_surface_t *surface = NULL;
 struct obj *testObj;
 GdkPixbuf* buff;
 guchar *pixels;
-
+int canvas_height, canvas_width;
+int Xvp_min, Xvp_max, Yvp_min, Yvp_max;
 int rowstride, n_channels;
 static void put_pixel(int x, int y, guchar red, guchar green, guchar blue) {
     guchar* p = pixels + y * rowstride + x * n_channels;
@@ -110,14 +109,21 @@ static void clear_surface (void) {
     cairo_destroy(cr);
 }
 
-
-
 /* Create a new surface of the appropriate size to store our scribbles */
-static gboolean configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, gpointer data) {
+gboolean configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, gpointer data) {
+  printf("configuring\n");
     if (surface)
         cairo_surface_destroy (surface);
-    surface = gdk_window_create_similar_surface (gtk_widget_get_window(widget), CAIRO_CONTENT_COLOR, gtk_widget_get_allocated_width(widget), gtk_widget_get_allocated_height(widget));
+    canvas_width = gtk_widget_get_allocated_width(widget);
+    canvas_height = gtk_widget_get_allocated_height(widget);
+    Yvp_min = 0; Xvp_min = 0; Xvp_max = canvas_width; Yvp_max = canvas_height;
+    surface = gdk_window_create_similar_surface (gtk_widget_get_window(widget), CAIRO_CONTENT_COLOR, canvas_width, canvas_height);
+    buff = gdk_pixbuf_new(GDK_COLORSPACE_RGB, 0, 8, canvas_width, canvas_height);
+    n_channels = gdk_pixbuf_get_n_channels (buff);
+    rowstride = gdk_pixbuf_get_rowstride (buff);
+    pixels = gdk_pixbuf_get_pixels (buff);
     clear_surface ();
+    gtk_widget_add_events(widget, GDK_BUTTON_PRESS_MASK | GDK_POINTER_MOTION_MASK);
     return TRUE;
 }
 
@@ -125,7 +131,7 @@ static gboolean configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, 
  * signal receives a ready-to-be-used cairo_t that is already
  * clipped to only draw the exposed areas of the widget
  */
-static gboolean draw_cb(GtkWidget *widget, cairo_t *cr, gpointer data) {
+gboolean draw_cb(GtkWidget *widget, cairo_t *cr, gpointer data) {
     cairo_set_source_surface (cr, surface, 0, 0);
     cairo_paint (cr);
     return FALSE;
@@ -138,17 +144,11 @@ static gboolean draw_cb(GtkWidget *widget, cairo_t *cr, gpointer data) {
  */
 
 gboolean button_press_event_cb (GtkWidget *widget, GdkEventButton *event, gpointer data) {
-    if (surface == NULL)
-        return FALSE;
-    if (event->button == GDK_BUTTON_PRIMARY) {
-        //draw_brush (widget, event->x, event->y);
-    }
-    else if (event->button == GDK_BUTTON_SECONDARY) {
-    }
     return TRUE;
 }
 
 gboolean upload_button_clicked_cb (GtkWidget *widget, GdkEventButton *event, gpointer data) {
+  printf("got it button!\n");
     return TRUE;  
 }
 
@@ -219,11 +219,6 @@ static void close_window (void) {
 }
 
 static void activate (GtkApplication *app, gpointer user_data) {
-    // buff = gdk_pixbuf_new(GDK_COLORSPACE_RGB, 0, 8, 600, 600);
-    // n_channels = gdk_pixbuf_get_n_channels (buff);
-    // rowstride = gdk_pixbuf_get_rowstride (buff);
-    // pixels = gdk_pixbuf_get_pixels (buff);
-
     // //GtkBuilder *gtkBuilder = gtk_builder_new();
     // GtkBuilder *gtkBuilder = gtk_builder_new_from_file ("render.glade");
     // //gtk_builder_add_from_file(gtkBuilder,"render.glade", NULL); 
@@ -267,8 +262,8 @@ int main (int argc, char **argv)
     // GtkApplication *app;
     // int status;
 
-    // testObj = (struct obj*)malloc(sizeof(struct obj));
-    // read_object("african_head.obj", testObj);
+    testObj = (struct obj*)malloc(sizeof(struct obj));
+    read_object("african_head.obj", testObj);
 
     // app = gtk_application_new ("org.gtk.example", G_APPLICATION_FLAGS_NONE);
     // g_signal_connect (app, "activate", G_CALLBACK (activate), NULL);
@@ -278,7 +273,7 @@ int main (int argc, char **argv)
     // return status;
     GtkBuilder      *builder; 
     GtkWidget       *window;
- 
+
     gtk_init(&argc, &argv);
  
     builder = gtk_builder_new();
