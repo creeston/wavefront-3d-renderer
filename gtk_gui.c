@@ -1,5 +1,21 @@
 #include "gtk_gui.h"
 
+#include <gtk/gtk.h>
+#include "renderer.h"
+
+gboolean motion_notify_event_cb (GtkWidget *widget, GdkEventMotion *event, gpointer data);
+gboolean button_press_event_cb (GtkWidget *widget, GdkEventButton *event, gpointer data);
+gboolean upload_button_clicked_cb (GtkWidget *widget, GdkEventButton *event, gpointer data);
+gboolean configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, gpointer data);
+gboolean draw_cb(GtkWidget *widget, cairo_t *cr, gpointer data);
+void on_window_destroy();
+void rotateHandler(GdkEventMotion *event, double *theta, double *phi);
+void clear_surface();
+
+struct obj *testObj;
+cairo_surface_t *surface;
+int canvas_height, canvas_width;
+
 void init_gui(int argc, char **argv) {
 	testObj = (struct obj*)malloc(sizeof(struct obj));
     read_object("african_head.obj", testObj);
@@ -26,14 +42,10 @@ gboolean configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, gpointe
         cairo_surface_destroy (surface);
     canvas_width = gtk_widget_get_allocated_width(widget);
     canvas_height = gtk_widget_get_allocated_height(widget);
-    Yvp_min = 0; Xvp_min = 0; Xvp_max = canvas_width; Yvp_max = canvas_height;
     surface = gdk_window_create_similar_surface (gtk_widget_get_window(widget), CAIRO_CONTENT_COLOR, canvas_width, canvas_height);
-    buff = gdk_pixbuf_new(GDK_COLORSPACE_RGB, 0, 8, canvas_width, canvas_height);
-    n_channels = gdk_pixbuf_get_n_channels (buff);
-    rowstride = gdk_pixbuf_get_rowstride (buff);
-    pixels = gdk_pixbuf_get_pixels (buff);
     clear_surface();
     gtk_widget_add_events(widget, GDK_BUTTON_PRESS_MASK | GDK_POINTER_MOTION_MASK);
+    init_buffer(canvas_width, canvas_height);
     return TRUE;
 }
 
@@ -75,14 +87,6 @@ void on_window_destroy() {
     gtk_main_quit ();
 }
 
-void clear_surface (void) {
-    cairo_t *cr;
-    cr = cairo_create(surface);
-    cairo_set_source_rgb(cr, 1, 1, 1);
-    cairo_paint(cr);
-    cairo_destroy(cr);
-}
-
 void rotateHandler(GdkEventMotion *event, double *theta, double *phi) {
     static int prev_y = 0, prev_x = 0;
     static int ycountpos = 0, xcountpos = 0, xcountneg = 0, ycountneg = 0; 
@@ -107,4 +111,12 @@ void rotateHandler(GdkEventMotion *event, double *theta, double *phi) {
         *theta -= 1;
         xcountneg = 0;
     }
+}
+
+void clear_surface(void) {
+    cairo_t *cr;
+    cr = cairo_create(surface);
+    cairo_set_source_rgb(cr, 1, 1, 1);
+    cairo_paint(cr);
+    cairo_destroy(cr);
 }

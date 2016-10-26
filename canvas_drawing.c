@@ -1,5 +1,25 @@
 #include "canvas_drawing.h"
 
+GdkPixbuf* buff;
+guchar *pixels;
+int rowstride, n_channels;
+int Xvp_min, Xvp_max, Yvp_min, Yvp_max;
+
+void swapI(int *x, int *y) {
+    int aux;
+    aux = *x;
+    *x = *y;
+    *y = aux;
+}
+
+void init_buffer(int canvas_width, int canvas_height) {
+	Yvp_min = 0; Xvp_min = 0; Xvp_max = canvas_width; Yvp_max = canvas_height;
+	buff = gdk_pixbuf_new(GDK_COLORSPACE_RGB, 0, 8, canvas_width, canvas_height);
+    n_channels = gdk_pixbuf_get_n_channels (buff);
+    rowstride = gdk_pixbuf_get_rowstride (buff);
+    pixels = gdk_pixbuf_get_pixels (buff);
+}
+
 void draw_pixel(int x, int y, struct color clr) {
     guchar* p = pixels + y * rowstride + x * n_channels;
     p[0] = clr.r;
@@ -33,4 +53,8 @@ void line(int x0, int y0, int x1, int y1, struct color Cl, int flag) {
             else 
                draw_pixel(x, y, Cl);
     }
+}
+
+void clear_buffer() {
+	gdk_pixbuf_fill(buff, 0x000000);
 }

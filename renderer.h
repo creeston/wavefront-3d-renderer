@@ -1,6 +1,37 @@
 #include "canvas_drawing.h"
+#include <stdlib.h>
 
 #define BIG 1e30
+
+
+struct ver {
+    double x,y,z;
+    int *connect;
+    double a, b ,c;
+};
+
+struct tr{
+    int A,B,C;
+    double a,b,c,h;
+    int first;
+};
+
+struct obj {
+    struct ver *fvertex, *vertex;
+    int nvr;
+    struct tr* triangle;
+    int ntr;
+    int n;
+};
+
+struct v2D{
+    int x,y;
+    float depth;
+};
+
+struct v3D {
+    double x,y,z;
+};
 
 
 void read_object(char *filename, struct obj *object);
@@ -18,9 +49,9 @@ int proect_coordinate(char flag, struct ver* vertex, int num);
 void normalize_vector(struct v3D *vec);
 void viewing(double x, double xO,double y, double yO, double z, double zO, double *pxe, double *pye, double *pze);
 void count_coefficients(double rho, double theta, double phi);
-
 void update_z_buffer();
 void rast_line(struct v2D A, struct v2D B, struct v2D C, struct color Cl);
+void swapS(struct v2D *A, struct v2D *B);
 
 extern struct color Red;
 extern struct v3D lightdir;

@@ -1,9 +1,37 @@
 #include "renderer.h"
+
+#include <string.h>
+
+#define sqr(x) ((x)*(x))
+
 struct color Red = {255, 0 ,0};
 struct v3D lightdir = {0,0,1};
 double v11, v12, v13, v21, v22, v23, v32, v33, v43, d, c1, c2, onetime = 1, Xvp_range, Yvp_range;
 double eps = 1.e-5, meps = -1.e-5, oneminus = 1 - 1.e-5, oneplus = 1 + 1.e-5;
 int *zbuffer;
+
+void swapS(struct v2D *A, struct v2D *B) {
+    int xaux, yaux;
+    xaux = A->x;
+    A->x = B->x;
+    B->x = xaux;
+
+    yaux = A->y;
+    A->y = B->y;
+    B->y = yaux;
+
+    double aux;
+    aux = A->depth;
+    A->depth = B->depth;
+    B->depth = aux;
+}
+
+void swap(double *x, double *y) {
+    double aux;
+    aux = *x;
+    *x = *y;
+    *y = aux;
+}
 
 void read_object(char *filename, struct obj *object) {
     FILE *fpin;
