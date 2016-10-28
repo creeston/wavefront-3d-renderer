@@ -66,6 +66,119 @@ void read_object(char *filename, struct obj *object) {
     fclose(fpin);
 }
 
+void read_vertex(char *str, struct ver **fvertex, int *nvr) {
+    static double xmin = BIG, ymin = BIG, zmin = BIG, xmax = -BIG, ymax = -BIG, zmax = -BIG;
+    char numx[15], numy[15], numz[15];
+    int i = 1;
+    while (str[i] == ' ')
+        ++i;
+    int j = 0;
+    while (str[i] != ' ') {
+        numx[j] = str[i];
+        ++i; ++j;
+    }
+    double x = atof(numx) * 100;
+    ++i; 
+    j = 0;
+    while (str[i] != ' ') {
+        numy[j] = str[i];
+        ++i; ++j;
+    }
+    double y = atof(numy) * 100;
+    ++i; j = 0;
+    while (str[i] != '\0') {
+        numz[j] = str[i];
+       ++i; ++j;
+    }
+    double z = atof(numz) * 100;
+
+    if (x > xmax) xmax = x; if (x < xmin) xmin = x;
+    if (y > ymax) ymax = y; if (y < ymin) ymin = y;
+    if (z > zmax) zmax = z; if (z < zmin) zmin = z;
+
+    if (*nvr == 1) {
+        *fvertex = (struct ver *)malloc(2 * sizeof(struct ver));
+        (*fvertex)[0].x = 0; (*fvertex)[0].y = 0; (*fvertex)[0].z = 0;
+    } else
+        *fvertex = (struct ver *)realloc(*fvertex, (*nvr + 1) * sizeof(struct ver));
+
+    (*fvertex)->x = (xmin + xmax) / 2; (*fvertex)->y = (ymin + ymax) / 2; (*fvertex)->z = (zmin + zmax) / 2;
+    (*fvertex + *nvr)->x = x; (*fvertex + *nvr)->y = y; (*fvertex + *nvr)->z = z;
+    *nvr += 1;
+}
+
+void read_face(char *str, struct tr **triangle, int *ntr) {
+    char num[10], part[150][30];
+    int j = 0, i = 2, k = 0, poly[30];
+
+    while (1 == 1) {
+        if (str[i] == ' ') {
+            part[k][j] = '\0';
+            if (str[i + 1] == '\0') break;
+            ++i; ++k; j = 0;
+            continue;
+        } else if (str[i] == '\0') {
+            part[k][j] = '\0';
+            break;
+        }
+        part[k][j] = str[i];
+        ++j; ++i;
+    }
+
+    for (i = 0; i <= k; ++i) {
+        j = 0;
+        while (part[i][j] != '/' && part[i][j] != '\0') {
+            num[j] = part[i][j];
+            ++j;
+        }
+        poly[i] = abs(atoi(num));
+        while (j >= 0) {
+            num[j] = '\0';
+            --j;
+        }
+    }
+
+    int i0 = 0, i1 = 1, i2 = 2, A, B, C, first = 1;
+    while(i2 != k + 1) {
+        A = poly[i0], B = poly[i1], C = poly[i2];
+        if (*ntr == 0)
+            *triangle = malloc(sizeof(struct tr));
+        else
+            *triangle = (struct tr*)realloc(*triangle, (*ntr + 1) * sizeof(struct tr));
+
+        (*triangle + *ntr)->A = A; (*triangle + *ntr)->B = B; (*triangle + *ntr)->C = C; (*triangle + *ntr)->first = first;
+        *ntr += 1; ++i1; ++i2; first = 0;
+    }
+}
+
+void draw_objects(struct obj **objects, int objects_amount, struct color C, double theta, double phi) {
+    update_z_buffer();
+    for (int i = 0; i < objects_amount; i++) {
+        struct obj* object = objects[i];
+        struct ver **fvertex = &(object->fvertex);
+        struct ver **vertex = &(object->vertex);
+        int nvr = object->nvr;
+
+        struct tr **triangle = &object->triangle;
+        int ntr = object->ntr;
+
+        double Range[4] = {BIG, -BIG, BIG, -BIG};
+        count_coefficients(3000.0, theta, phi);
+
+        calculate_vertexes(*fvertex, vertex, nvr, Range);
+
+        if (onetime) {
+            calculate_scale(Range[0], Range[1], Range[2], Range[3]);
+            init_z_buffer();
+        }
+        onetime = 0;
+
+        calculate_triangles(*vertex, triangle, ntr, nvr);
+
+        draw_triangle(*triangle, ntr, *vertex, C);
+    }
+}
+
 void draw_obj(struct obj *object, struct color C, double theta, double phi) {
     update_z_buffer();
     struct ver **fvertex = &(object->fvertex);
@@ -87,7 +200,7 @@ void draw_obj(struct obj *object, struct color C, double theta, double phi) {
     onetime = 0;
 
     calculate_triangles(*vertex, triangle, ntr, nvr);
-        /* Считаем нормали к вершинам*/
+        /* Считаем нормали к вершинам */
        //extraCalcVertex(vertex, nvr, *triangle);
 
     draw_triangle(*triangle, ntr, *vertex, C);
@@ -146,8 +259,8 @@ void calculate_vertexes(struct ver* fvertex, struct ver** vertex, int nvr, doubl
         if (Y < Range[2]) Range[2] = Y; if (Y > Range[3]) Range[3] = Y;
 
         (*vertex + i)->x = xe; (*vertex + i)->y = ye; (*vertex + i)->z = ze;
-  if ((*vertex + i) == NULL)
-      printf("some kind of error\n");
+        if ((*vertex + i) == NULL)
+            printf("some kind of error\n");
     }
 }
 
@@ -155,13 +268,19 @@ void calculate_scale(double Xmin, double Xmax, double Ymin, double Ymax) {
     double fx, fy, Xcentre, Ycentre, Xvp_centre, Yvp_centre;
     double Xrange, Yrange;
 
-    Xrange = Xmax - Xmin; Yrange = Ymax - Ymin;
-    Xvp_range = Xvp_max - Xvp_min; Yvp_range = Yvp_max - Yvp_min;
-    fx = Xvp_range / Xrange; fy = Yvp_range / Yrange;
+    Xrange = Xmax - Xmin; 
+    Yrange = Ymax - Ymin;
+    Xvp_range = Xvp_max - Xvp_min; 
+    Yvp_range = Yvp_max - Yvp_min;
+    fx = Xvp_range / Xrange; 
+    fy = Yvp_range / Yrange;
     d = (fx < fy) ? fx : fy;
-    Xcentre = (Xmin + Xmax) / 2; Ycentre = (Ymax + Ymin) / 2;
-    Xvp_centre = (Xvp_min + Xvp_max) / 2; Yvp_centre = (Yvp_min + Yvp_max) / 2;
-    c1 = Xvp_centre - d * Xcentre; c2 = Yvp_centre - d * Ycentre;
+    Xcentre = (Xmin + Xmax) / 2; 
+    Ycentre = (Ymax + Ymin) / 2;
+    Xvp_centre = (Xvp_min + Xvp_max) / 2; 
+    Yvp_centre = (Yvp_min + Yvp_max) / 2;
+    c1 = Xvp_centre - d * Xcentre; 
+    c2 = Yvp_centre - d * Ycentre;
 }
 
 void calculate_triangles(struct ver* vertex, struct tr **triangle, int ntr, int nvr) {
@@ -254,91 +373,6 @@ void rast_triangles(struct v2D A, struct v2D B, struct v2D C, struct color Cl) {
     }
 }
 
-void read_vertex(char *str, struct ver **fvertex, int *nvr) {
-    static double xmin = BIG, ymin = BIG, zmin = BIG, xmax = -BIG, ymax = -BIG, zmax = -BIG;
-    char numx[15], numy[15], numz[15];
-    int i = 1;
-    while (str[i] == ' ')
-        ++i;
-    int j = 0;
-    while (str[i] != ' ') {
-        numx[j] = str[i];
-        ++i; ++j;
-    }
-    double x = atof(numx) * 100;
-    ++i; 
-    j = 0;
-    while (str[i] != ' ') {
-        numy[j] = str[i];
-        ++i; ++j;
-    }
-    double y = atof(numy) * 100;
-    ++i; j = 0;
-    while (str[i] != '\0') {
-        numz[j] = str[i];
-       ++i; ++j;
-    }
-    double z = atof(numz) * 100;
-
-    if (x > xmax) xmax = x; if (x < xmin) xmin = x;
-    if (y > ymax) ymax = y; if (y < ymin) ymin = y;
-    if (z > zmax) zmax = z; if (z < zmin) zmin = z;
-
-    if (*nvr == 1) {
-        *fvertex = (struct ver *)malloc(2 * sizeof(struct ver));
-        (*fvertex)[0].x = 0; (*fvertex)[0].y = 0; (*fvertex)[0].z = 0;
-    } else
-        *fvertex = (struct ver *)realloc(*fvertex, (*nvr + 1) * sizeof(struct ver));
-
-    (*fvertex)->x = (xmin + xmax) / 2; (*fvertex)->y = (ymin + ymax) / 2; (*fvertex)->z = (zmin + zmax) / 2;
-    (*fvertex + *nvr)->x = x; (*fvertex + *nvr)->y = y; (*fvertex + *nvr)->z = z;
-    *nvr += 1;
-}
-
-void read_face(char *str, struct tr **triangle, int *ntr) {
-    char num[10], part[150][30];
-    int j = 0, i = 2, k = 0, poly[30];
-
-    while (1 == 1) {
-        if (str[i] == ' ') {
-            part[k][j] = '\0';
-            if (str[i + 1] == '\0') break;
-            ++i; ++k; j = 0;
-            continue;
-        } else if (str[i] == '\0') {
-            part[k][j] = '\0';
-            break;
-        }
-        part[k][j] = str[i];
-        ++j; ++i;
-    }
-
-    for (i = 0; i <= k; ++i) {
-        j = 0;
-        while (part[i][j] != '/' && part[i][j] != '\0') {
-            num[j] = part[i][j];
-            ++j;
-        }
-        poly[i] = abs(atoi(num));
-        while (j >= 0) {
-            num[j] = '\0';
-            --j;
-        }
-    }
-
-    int i0 = 0, i1 = 1, i2 = 2, A, B, C, first = 1;
-    while(i2 != k + 1) {
-        A = poly[i0], B = poly[i1], C = poly[i2];
-        if (*ntr == 0)
-            { *triangle = malloc(sizeof(struct tr));}
-        else
-           *triangle = (struct tr*)realloc(*triangle, (*ntr + 1) * sizeof(struct tr));
-
-        (*triangle + *ntr)->A = A; (*triangle + *ntr)->B = B; (*triangle + *ntr)->C = C; (*triangle + *ntr)->first = first;
-        *ntr += 1; ++i1; ++i2; first = 0;
-    }
-}
-
 void init_vertexes(struct ver **vertex, int nvr) {   
     int i;
     *vertex = (struct ver*)malloc((nvr + 1) * sizeof(struct ver));
@@ -395,4 +429,36 @@ void update_z_buffer() {
 
 void rast_line(struct v2D A, struct v2D B, struct v2D C, struct color Cl) {
     line(A.x, A.y, B.x, B.y, Cl, CROP); line(B.x, B.y, C.x, C.y, Cl, CROP); line(C.x, C.y, A.x, A.y, Cl, CROP);
+}
+
+void move_obj_relative(struct obj *object, int dx, int dy, int dz) {
+    for (int i = 1; i <= object->nvr; ++i) {
+        object->fvertex[i].x += dx;
+        object->fvertex[i].y += dy;
+        object->fvertex[i].z += dz;
+    }
+}
+
+void move_obj_absolute(struct obj *object, int x, int y, int z) {
+    int dx = x - object->fvertex[0].x;
+    int dy = y - object->fvertex[0].y;
+    int dz = z - object->fvertex[0].z;
+    for (int i = 1; i <= object->nvr; ++i) {
+        object->fvertex[i].x += dx;
+        object->fvertex[i].y += dy;
+        object->fvertex[i].z += dz;
+    }
+}
+
+void rotate_obj(struct obj* object, double theta, double phi)
+{
+    int nvr = object->nvr;
+    double xe, ye, ze;
+    double xO = object->fvertex[0].x, yO = object->fvertex[0].y, zO = object->fvertex[0].z;
+    struct ver *fvertex = object->fvertex;
+    count_coefficients(1, theta, phi);
+    for (int i = 1; i <= nvr; ++i) {
+        viewing(fvertex[i].x, 0, fvertex[i].y, 0, fvertex[i].z, 0, &xe, &ye, &ze);
+        fvertex[i].x = xe; fvertex[i].y = ye; fvertex[i].z = ze;
+    }
 }

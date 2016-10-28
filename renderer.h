@@ -1,5 +1,4 @@
 #include "canvas_drawing.h"
-#include <stdlib.h>
 
 #define BIG 1e30
 
@@ -10,7 +9,7 @@ struct ver {
     double a, b ,c;
 };
 
-struct tr{
+struct tr {
     int A,B,C;
     double a,b,c,h;
     int first;
@@ -24,7 +23,7 @@ struct obj {
     int n;
 };
 
-struct v2D{
+struct v2D {
     int x,y;
     float depth;
 };
@@ -36,6 +35,7 @@ struct v3D {
 
 void read_object(char *filename, struct obj *object);
 void draw_obj(struct obj *object, struct color C, double theta, double phi);
+void draw_objects(struct obj **object, int objects_amount, struct color C, double theta, double phi);
 void draw_triangle(struct tr* triangle, int ntr, struct ver* vertex, struct color Cl);
 void init_z_buffer();
 void calculate_vertexes(struct ver* fvertex, struct ver** vertex, int nvr, double *Range);
@@ -52,6 +52,9 @@ void count_coefficients(double rho, double theta, double phi);
 void update_z_buffer();
 void rast_line(struct v2D A, struct v2D B, struct v2D C, struct color Cl);
 void swapS(struct v2D *A, struct v2D *B);
+void move_obj_relative(struct obj *object, int dx, int dy, int dz);
+void move_obj_absolute(struct obj *object, int x, int y, int z);
+void rotate_obj(struct obj* object, double theta, double phi);
 
 extern struct color Red;
 extern struct v3D lightdir;
