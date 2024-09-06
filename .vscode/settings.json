@@ -1,0 +1,11 @@
+{
+    "files.associations": {
+        "renderer.h": "c",
+        "canvas_drawing.h": "c",
+        "gdk-pixbuf.h": "c",
+        "stdlib.h": "c",
+        "math.h": "c",
+        "gtk_gui.h": "c",
+        "gtk.h": "c"
+    }
+}

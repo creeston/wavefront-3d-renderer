@@ -24,7 +24,7 @@ void init_gui(int argc, char **argv) {
     objects[0] = (struct obj*)malloc(sizeof(struct obj));
     objects[1] = (struct obj*)malloc(sizeof(struct obj));
     struct obj* object = objects[0];
-    read_object("african_head.obj", object);
+    read_object("objects/african_head.obj", object);
     objects[objects_amount] = object;
     objects_amount++;
 
@@ -80,6 +80,8 @@ gboolean upload_button_clicked_cb (GtkWidget *widget, GdkEventButton *event, gpo
         g_free (filename);
     }
     gtk_widget_destroy (dialog);
+
+    return TRUE;
 }
 
 gboolean motion_notify_event_cb (GtkWidget *widget, GdkEventMotion *event, gpointer data) {
@@ -107,6 +109,18 @@ gboolean scroll_cb(GtkWidget *widget, GdkEventScroll *event, gpointer data) {
         case GDK_SCROLL_DOWN:
             d += 20;
         break;
+        case GDK_SCROLL_LEFT:
+            c1 -= 0.1;
+        break;
+        case GDK_SCROLL_RIGHT:
+            c1 += 0.1;
+        break;
+        case GDK_SCROLL_SMOOTH:
+            if (event->delta_y > 0)
+                d -= 20;
+            else
+                d += 20;
+        break;
     }
     cairo_t *cr = cairo_create(surface);
     gdk_pixbuf_fill(buff, 0x000000);
@@ -116,6 +130,8 @@ gboolean scroll_cb(GtkWidget *widget, GdkEventScroll *event, gpointer data) {
     cairo_fill (cr);
     cairo_destroy(cr);
     gtk_widget_queue_draw (widget);
+
+    return TRUE;
 }
 
 void on_window_destroy() {
