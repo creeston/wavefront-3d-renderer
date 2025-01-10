@@ -5,8 +5,9 @@
 #define CROP 1
 #define NOCROP 2
 
-struct color {
-    int r,g,b;
+struct color
+{
+    int r, g, b;
 };
 
 void line(int x0, int y0, int x1, int y1, struct color Cl, int flag);
