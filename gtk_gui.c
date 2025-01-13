@@ -1,9 +1,8 @@
-#include "gtk_gui.h"
-
 #include <gtk/gtk.h>
-#include "renderer.h"
 #include <math.h>
-#include <argp.h>
+
+#include "gtk_gui.h"
+#include "renderer.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -41,70 +40,15 @@ double current_z_gamma = 0;
 void rotate_around_x(int alpha, double *rho, double *theta, double *phi);
 void rotate_around_y(int alpha, double *rho, double *theta, double *phi);
 void rotate_around_z(int alpha, double *rho, double *theta, double *phi);
+
 static int currently_drawing = 0;
 
-const char *argp_program_version = "3d-render 1.0";
-const char *argp_program_bug_address = "<bug@example.com>";
+struct color Red = {255, 0, 0};
+struct color Black = {100, 100, 100};
+int Background = 0xffffffff;
 
-static char doc[] = "3D Renderer -- A program to render 3D objects using GTK.";
-static char args_doc[] = "";
-
-static struct argp_option options[] = {
-    {"file", 'f', "FILE", 0, "Path to the 3D object file"},
-    {"fps", 'r', "FPS", 0, "Frames per second (30 or 60, default 60)"},
-    {0}};
-
-struct arguments
+void init_gui(struct arguments arguments, int argc, char **argv)
 {
-    char *file;
-    int fps;
-};
-
-static error_t parse_opt(int key, char *arg, struct argp_state *state)
-{
-    struct arguments *arguments = state->input;
-
-    switch (key)
-    {
-    case 'f':
-        arguments->file = arg;
-        break;
-    case 'r':
-        arguments->fps = atoi(arg);
-        if (arguments->fps != 30 && arguments->fps != 60)
-        {
-            argp_error(state, "FPS must be 30 or 60");
-        }
-        break;
-    case ARGP_KEY_ARG:
-        if (state->arg_num > 0)
-        {
-            argp_usage(state);
-        }
-        break;
-    case ARGP_KEY_END:
-        if (state->arg_num < 0)
-        {
-            argp_usage(state);
-        }
-        break;
-    default:
-        return ARGP_ERR_UNKNOWN;
-    }
-    return 0;
-}
-
-static struct argp argp = {options, parse_opt, args_doc, doc};
-
-void init_gui(int argc, char **argv)
-{
-    struct arguments arguments;
-
-    arguments.file = NULL;
-    arguments.fps = 60;
-
-    argp_parse(&argp, argc, argv, 0, 0, &arguments);
-
     int fps_interval = (arguments.fps == 30) ? 33 : 16;
 
     GtkBuilder *builder;
@@ -173,11 +117,9 @@ gboolean upload_button_clicked_cb(GtkWidget *widget, gpointer user_data)
         read_object(filename, object);
         rho = 3000.0;
         g_free(filename);
-        draw_object_on_canvas(global_canvas);
         gtk_revealer_set_reveal_child(global_revealer, TRUE);
     }
     gtk_widget_destroy(dialog);
-
     return TRUE;
 }
 
@@ -238,10 +180,11 @@ void on_window_destroy()
 
 void draw_object_on_canvas(GtkWidget *widget)
 {
-    cairo_t *cr = cairo_create(surface);
-    gdk_pixbuf_fill(buff, Background);
+    fill_buffer(Background);
     draw_obj(object, Black, theta, phi, rho);
-    gdk_cairo_set_source_pixbuf(cr, buff, 5, 5);
+
+    cairo_t *cr = cairo_create(surface);
+    set_pixbuf_for_surface(cr);
     cairo_paint(cr);
     cairo_fill(cr);
     cairo_destroy(cr);

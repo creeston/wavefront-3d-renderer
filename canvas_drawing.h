@@ -1,19 +1,17 @@
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <stdlib.h>
 #include <math.h>
-
-#define CROP 1
-#define NOCROP 2
+#include <cairo.h>
 
 struct color
 {
     int r, g, b;
 };
 
-void line(int x0, int y0, int x1, int y1, struct color Cl, int flag);
-void draw_pixel(int x, int y, struct color clr);
+gboolean draw_pixel(int x, int y, struct color clr);
 void clear_buffer();
 void init_buffer(int canvas_width, int canvas_height);
-
-extern int Xvp_min, Xvp_max, Yvp_min, Yvp_max;
-extern GdkPixbuf *buff;
+void fill_buffer(int color);
+void set_pixbuf_for_surface(cairo_t *surface);
+gboolean is_ready_to_draw();
+extern int x_viewpoint_min, x_viewpoint_max, y_viewpoint_min, y_viewpoint_max;

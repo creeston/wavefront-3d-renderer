@@ -1,12 +1,20 @@
 #include "renderer.h"
-
+#include "utils.h"
 #include <string.h>
 
 #define sqr(x) ((x) * (x))
 
-struct color Red = {255, 0, 0};
-struct color Black = {100, 100, 100};
-int Background = 0xffffffff;
+struct v2D
+{
+    int x, y;
+    float depth;
+};
+
+struct v3D
+{
+    double x, y, z;
+};
+
 struct v3D lightdir = {0, 0, 1};
 double v11, v12, v13, v21, v22, v23, v32, v33, v43, d, c1, c2, onetime = 1, Xvp_range, Yvp_range;
 double initial_d = 0;
@@ -19,6 +27,18 @@ int *zbuffer;
 
 #define DEG_TO_RAD(deg) ((deg) * M_PI / 180.0)
 #define RAD_TO_DEG(rad) ((rad) * 180.0 / M_PI)
+
+void rast_triangles(struct v2D A, struct v2D B, struct v2D C, struct color Cl);
+void draw_triangle(struct triangle *triangle, int ntr, struct vertice *vertex, struct color Cl);
+void init_z_buffer();
+void calculate_vertexes(struct vertice *fvertex, struct vertice **vertex, int nvr, double *Range);
+void calculate_scale(double Xmin, double Xmax, double Ymin, double Ymax);
+void calculate_triangles(struct vertice *vertex, struct triangle **triangle, int ntr, int nvr);
+int proect_coordinate(char flag, struct vertice *vertex, int num);
+void normalize_vector(struct v3D *vec);
+void viewing(double x, double xO, double y, double yO, double z, double zO, double *pxe, double *pye, double *pze);
+void count_coefficients(double rho, double theta, double phi);
+void update_z_buffer();
 
 void swapS(struct v2D *A, struct v2D *B)
 {
@@ -37,194 +57,14 @@ void swapS(struct v2D *A, struct v2D *B)
     B->depth = aux;
 }
 
-void swap(double *x, double *y)
-{
-    double aux;
-    aux = *x;
-    *x = *y;
-    *y = aux;
-}
-
-void read_object(char *filename, struct obj *object)
-{
-    FILE *fpin;
-    char string[100];
-
-    struct ver *fvertex;
-    struct ver *vertex;
-    int nvr = 1;
-
-    struct tr *triangle;
-    int ntr = 0;
-
-    fpin = fopen(filename, "r");
-    while (!feof(fpin))
-    {
-        fgets(string, sizeof(string), fpin);
-        switch (string[0])
-        {
-        case 'v':
-            if (string[1] == ' ')
-            {
-                string[strlen(string) - 1] = '\0';
-                read_vertex(string, &fvertex, &nvr);
-            }
-            break;
-        case 'f':
-            string[strlen(string) - 1] = '\0';
-            read_face(string, &triangle, &ntr);
-            break;
-        default:
-            continue;
-            break;
-        }
-    }
-    init_vertexes(&vertex, nvr);
-    object->fvertex = fvertex;
-    object->vertex = vertex;
-    object->ntr = ntr;
-    object->nvr = nvr;
-    object->triangle = triangle;
-    fclose(fpin);
-}
-
-void read_vertex(char *str, struct ver **fvertex, int *nvr)
-{
-    static double xmin = BIG, ymin = BIG, zmin = BIG, xmax = -BIG, ymax = -BIG, zmax = -BIG;
-    char numx[15], numy[15], numz[15];
-    int i = 1;
-    while (str[i] == ' ')
-        ++i;
-    int j = 0;
-    while (str[i] != ' ')
-    {
-        numx[j] = str[i];
-        ++i;
-        ++j;
-    }
-    double x = atof(numx) * 100;
-    ++i;
-    j = 0;
-    while (str[i] != ' ')
-    {
-        numy[j] = str[i];
-        ++i;
-        ++j;
-    }
-    double y = atof(numy) * 100;
-    ++i;
-    j = 0;
-    while (str[i] != '\0')
-    {
-        numz[j] = str[i];
-        ++i;
-        ++j;
-    }
-    double z = atof(numz) * 100;
-
-    if (x > xmax)
-        xmax = x;
-    if (x < xmin)
-        xmin = x;
-    if (y > ymax)
-        ymax = y;
-    if (y < ymin)
-        ymin = y;
-    if (z > zmax)
-        zmax = z;
-    if (z < zmin)
-        zmin = z;
-
-    if (*nvr == 1)
-    {
-        *fvertex = (struct ver *)malloc(2 * sizeof(struct ver));
-        (*fvertex)[0].x = 0;
-        (*fvertex)[0].y = 0;
-        (*fvertex)[0].z = 0;
-    }
-    else
-        *fvertex = (struct ver *)realloc(*fvertex, (*nvr + 1) * sizeof(struct ver));
-
-    (*fvertex)->x = (xmin + xmax) / 2;
-    (*fvertex)->y = (ymin + ymax) / 2;
-    (*fvertex)->z = (zmin + zmax) / 2;
-    (*fvertex + *nvr)->x = x;
-    (*fvertex + *nvr)->y = y;
-    (*fvertex + *nvr)->z = z;
-    *nvr += 1;
-}
-
-void read_face(char *str, struct tr **triangle, int *ntr)
-{
-    char num[10], part[150][30];
-    int j = 0, i = 2, k = 0, poly[30];
-
-    while (1 == 1)
-    {
-        if (str[i] == ' ')
-        {
-            part[k][j] = '\0';
-            if (str[i + 1] == '\0')
-                break;
-            ++i;
-            ++k;
-            j = 0;
-            continue;
-        }
-        else if (str[i] == '\0')
-        {
-            part[k][j] = '\0';
-            break;
-        }
-        part[k][j] = str[i];
-        ++j;
-        ++i;
-    }
-
-    for (i = 0; i <= k; ++i)
-    {
-        j = 0;
-        while (part[i][j] != '/' && part[i][j] != '\0')
-        {
-            num[j] = part[i][j];
-            ++j;
-        }
-        poly[i] = abs(atoi(num));
-        while (j >= 0)
-        {
-            num[j] = '\0';
-            --j;
-        }
-    }
-
-    int i0 = 0, i1 = 1, i2 = 2, A, B, C, first = 1;
-    while (i2 != k + 1)
-    {
-        A = poly[i0], B = poly[i1], C = poly[i2];
-        if (*ntr == 0)
-            *triangle = malloc(sizeof(struct tr));
-        else
-            *triangle = (struct tr *)realloc(*triangle, (*ntr + 1) * sizeof(struct tr));
-
-        (*triangle + *ntr)->A = A;
-        (*triangle + *ntr)->B = B;
-        (*triangle + *ntr)->C = C;
-        (*triangle + *ntr)->first = first;
-        *ntr += 1;
-        ++i1;
-        ++i2;
-        first = 0;
-    }
-}
-
 void draw_obj(struct obj *object, struct color C, double theta, double phi, double rho)
 {
     update_z_buffer();
-    struct ver **fvertex = &(object->fvertex);
-    struct ver **vertex = &(object->vertex);
+    struct vertice **fvertex = &(object->fvertex);
+    struct vertice **vertex = &(object->vertex);
     int nvr = object->nvr;
 
-    struct tr **triangle = &object->triangle;
+    struct triangle **triangle = &object->triangle;
     int ntr = object->ntr;
 
     double Range[4] = {BIG, -BIG, BIG, -BIG};
@@ -243,7 +83,7 @@ void draw_obj(struct obj *object, struct color C, double theta, double phi, doub
     draw_triangle(*triangle, ntr, *vertex, C);
 }
 
-void draw_triangle(struct tr *triangle, int ntr, struct ver *vertex, struct color Cl)
+void draw_triangle(struct triangle *triangle, int ntr, struct vertice *vertex, struct color Cl)
 {
     int i, XA, YA, XB, YB, XC, YC, A, B, C;
     double a, b, c, h, intensity;
@@ -289,7 +129,7 @@ void init_z_buffer()
         *(zbuffer + i) = 20000;
 }
 
-void calculate_vertexes(struct ver *fvertex, struct ver **vertex, int nvr, double *Range)
+void calculate_vertexes(struct vertice *fvertex, struct vertice **vertex, int nvr, double *Range)
 {
     int i;
     double x, y, z, xe, ye, ze, X, Y;
@@ -331,21 +171,21 @@ void calculate_scale(double Xmin, double Xmax, double Ymin, double Ymax)
 
     Xrange = Xmax - Xmin;
     Yrange = Ymax - Ymin;
-    Xvp_range = Xvp_max - Xvp_min;
-    Yvp_range = Yvp_max - Yvp_min;
+    Xvp_range = x_viewpoint_max - x_viewpoint_min;
+    Yvp_range = y_viewpoint_max - y_viewpoint_min;
     fx = Xvp_range / Xrange;
     fy = Yvp_range / Yrange;
     d = (fx < fy) ? fx : fy;
     initial_d = d;
     Xcentre = (Xmin + Xmax) / 2;
     Ycentre = (Ymax + Ymin) / 2;
-    Xvp_centre = (Xvp_min + Xvp_max) / 2;
-    Yvp_centre = (Yvp_min + Yvp_max) / 2;
+    Xvp_centre = (x_viewpoint_min + x_viewpoint_max) / 2;
+    Yvp_centre = (y_viewpoint_min + y_viewpoint_max) / 2;
     c1 = Xvp_centre - d * Xcentre;
     c2 = Yvp_centre - d * Ycentre;
 }
 
-void calculate_triangles(struct ver *vertex, struct tr **triangle, int ntr, int nvr)
+void calculate_triangles(struct vertice *vertex, struct triangle **triangle, int ntr, int nvr)
 {
     double xA, yA, zA, xB, yB, zB, xC, yC, zC, a, b, c, h, r;
     int i, j, A, B, C;
@@ -410,13 +250,21 @@ void calculate_triangles(struct ver *vertex, struct tr **triangle, int ntr, int 
 void rast_triangles(struct v2D A, struct v2D B, struct v2D C, struct color Cl)
 {
     if (A.y == B.y && A.y == C.y)
+    {
         return;
+    }
     if (A.y > B.y)
+    {
         swapS(&A, &B);
+    }
     if (A.y > C.y)
+    {
         swapS(&A, &C);
+    }
     if (B.y > C.y)
+    {
         swapS(&B, &C);
+    }
 
     int total_height = C.y - A.y, i, second_half, j, idx, segment_height;
     float alpha, beta, phi;
@@ -440,13 +288,13 @@ void rast_triangles(struct v2D A, struct v2D B, struct v2D C, struct color Cl)
 
         if (xI > xJ)
         {
-            swap(&xI, &xJ);
-            swap(&yI, &yJ);
+            swap_doubles(&xI, &xJ);
+            swap_doubles(&yI, &yJ);
         }
 
         for (j = xI; j <= xJ; ++j)
         {
-            if (j <= (Xvp_min) || j >= (Xvp_max) || (A.y + i) <= (Yvp_min) || (A.y + i) >= (Yvp_max))
+            if (j <= (x_viewpoint_min) || j >= (x_viewpoint_max) || (A.y + i) <= (y_viewpoint_min) || (A.y + i) >= (y_viewpoint_max))
                 continue;
             phi = xJ == xI ? 1. : (float)(j - xI) / (float)(xJ - xI);
             Pz = zI + (zJ - zI) * phi;
@@ -464,18 +312,7 @@ void rast_triangles(struct v2D A, struct v2D B, struct v2D C, struct color Cl)
     }
 }
 
-void init_vertexes(struct ver **vertex, int nvr)
-{
-    int i;
-    *vertex = (struct ver *)malloc((nvr + 1) * sizeof(struct ver));
-    for (i = 1; i <= nvr; ++i)
-    {
-        (*vertex + i)->connect = (int *)malloc(100 * sizeof(int));
-        *((*vertex + i)->connect) = 0;
-    }
-}
-
-int proect_coordinate(char flag, struct ver *vertex, int num)
+int proect_coordinate(char flag, struct vertice *vertex, int num)
 {
     switch (flag)
     {
@@ -534,13 +371,6 @@ void update_z_buffer()
         if ((zbuffer + i) != NULL)
             *(zbuffer + i) = 20000;
     }
-}
-
-void rast_line(struct v2D A, struct v2D B, struct v2D C, struct color Cl)
-{
-    line(A.x, A.y, B.x, B.y, Cl, CROP);
-    line(B.x, B.y, C.x, C.y, Cl, CROP);
-    line(C.x, C.y, A.x, A.y, Cl, CROP);
 }
 
 void move_obj_relative(struct obj *object, int dx, int dy, int dz)

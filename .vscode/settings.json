@@ -12,7 +12,12 @@
         "galloca.h": "c",
         "gtypes.h": "c",
         "gmacros.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "cairo.h": "c",
+        "utils.h": "c",
+        "model.h": "c",
+        "model.c": "c",
+        "stdio.h": "c"
     },
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "ms-vscode.cpptools"
