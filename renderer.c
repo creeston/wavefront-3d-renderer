@@ -13,6 +13,13 @@ double initial_d = 0;
 double eps = 1.e-5, meps = -1.e-5, oneminus = 1 - 1.e-5, oneplus = 1 + 1.e-5;
 int *zbuffer;
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+#define DEG_TO_RAD(deg) ((deg) * M_PI / 180.0)
+#define RAD_TO_DEG(rad) ((rad) * 180.0 / M_PI)
+
 void swapS(struct v2D *A, struct v2D *B)
 {
     int xaux, yaux;
@@ -210,38 +217,7 @@ void read_face(char *str, struct tr **triangle, int *ntr)
     }
 }
 
-void draw_objects(struct obj **objects, int objects_amount, struct color C, double theta, double phi, double rho)
-{
-    update_z_buffer();
-    for (int i = 0; i < objects_amount; i++)
-    {
-        struct obj *object = objects[i];
-        struct ver **fvertex = &(object->fvertex);
-        struct ver **vertex = &(object->vertex);
-        int nvr = object->nvr;
-
-        struct tr **triangle = &object->triangle;
-        int ntr = object->ntr;
-
-        double Range[4] = {BIG, -BIG, BIG, -BIG};
-        count_coefficients(rho, theta, phi);
-
-        calculate_vertexes(*fvertex, vertex, nvr, Range);
-
-        if (onetime)
-        {
-            calculate_scale(Range[0], Range[1], Range[2], Range[3]);
-            init_z_buffer();
-        }
-        onetime = 0;
-
-        calculate_triangles(*vertex, triangle, ntr, nvr);
-
-        draw_triangle(*triangle, ntr, *vertex, C);
-    }
-}
-
-void draw_obj(struct obj *object, struct color C, double theta, double phi)
+void draw_obj(struct obj *object, struct color C, double theta, double phi, double rho)
 {
     update_z_buffer();
     struct ver **fvertex = &(object->fvertex);
@@ -252,7 +228,7 @@ void draw_obj(struct obj *object, struct color C, double theta, double phi)
     int ntr = object->ntr;
 
     double Range[4] = {BIG, -BIG, BIG, -BIG};
-    count_coefficients(3000.0, theta, phi);
+    count_coefficients(rho, theta, phi);
 
     calculate_vertexes(*fvertex, vertex, nvr, Range);
 
@@ -532,9 +508,8 @@ void count_coefficients(double rho, double theta, double phi)
 {
     double th, ph, costh, sinth, cosph, sinph, factor;
 
-    factor = atan(1.0) / 45.0;
-    th = theta * factor;
-    ph = phi * factor;
+    th = DEG_TO_RAD(theta);
+    ph = DEG_TO_RAD(phi);
     costh = cos(th);
     sinth = sin(th);
     cosph = cos(ph);
@@ -589,4 +564,9 @@ void move_obj_absolute(struct obj *object, int x, int y, int z)
         object->fvertex[i].y += dy;
         object->fvertex[i].z += dz;
     }
+}
+
+void change_scale(float scale)
+{
+    d = initial_d * scale;
 }

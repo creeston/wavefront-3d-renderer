@@ -3,6 +3,7 @@
 #include <gtk/gtk.h>
 #include "renderer.h"
 #include <math.h>
+#include <argp.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -11,41 +12,105 @@
 #define DEG_TO_RAD(deg) ((deg) * M_PI / 180.0)
 #define RAD_TO_DEG(rad) ((rad) * 180.0 / M_PI)
 
-gboolean motion_notify_event_cb(GtkWidget *widget, GdkEventMotion *event, gpointer data);
 gboolean configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, gpointer data);
 gboolean draw_cb(GtkWidget *widget, cairo_t *cr, gpointer data);
-gboolean scroll_cb(GtkWidget *widget, GdkEventScroll *event, gpointer data);
 gboolean on_zoom_slider_value_changed(GtkRange *range, gpointer user_data);
 gboolean on_rotate_phi_slider_value_changed(GtkRange *range, gpointer user_data);
 gboolean on_rotate_theta_slider_value_changed(GtkRange *range, gpointer user_data);
+gboolean on_rotate_x_slider_value_changed(GtkRange *range, gpointer user_data);
 void on_toggle_button_clicked(GtkButton *button, gpointer user_data);
 gboolean upload_button_clicked_cb(GtkWidget *widget, gpointer data);
 
 void on_window_destroy();
-void rotateHandler(GdkEventMotion *event, double *theta, double *phi);
 void clear_surface();
 void draw_object_on_canvas(GtkWidget *widget);
-
+gboolean is_object_loaded();
+gboolean timer_exe(GtkWidget *window);
 GtkRevealer *global_revealer;
 GtkWidget *global_canvas;
 
-struct obj *objects[1];
-int objects_amount;
+struct obj *object;
 cairo_surface_t *surface;
 int canvas_height, canvas_width;
-double phi = 0, theta = 0, rho = 0;
+double phi = 0, theta = 0, rho = 3000;
 double x, y, z = 0;
+double current_x_alpha = 0;
+double current_y_beta = 0;
+double current_z_gamma = 0;
 
-void cartesian_to_spherical(double x, double y, double z, double *rho, double *theta, double *phi);
-void angles_to_spherical(double x_deg, double y_deg, double z_deg, double *theta_deg, double *phi_deg);
+void rotate_around_x(int alpha, double *rho, double *theta, double *phi);
+void rotate_around_y(int alpha, double *rho, double *theta, double *phi);
+void rotate_around_z(int alpha, double *rho, double *theta, double *phi);
+static int currently_drawing = 0;
+
+const char *argp_program_version = "3d-render 1.0";
+const char *argp_program_bug_address = "<bug@example.com>";
+
+static char doc[] = "3D Renderer -- A program to render 3D objects using GTK.";
+static char args_doc[] = "";
+
+static struct argp_option options[] = {
+    {"file", 'f', "FILE", 0, "Path to the 3D object file"},
+    {"fps", 'r', "FPS", 0, "Frames per second (30 or 60, default 60)"},
+    {0}};
+
+struct arguments
+{
+    char *file;
+    int fps;
+};
+
+static error_t parse_opt(int key, char *arg, struct argp_state *state)
+{
+    struct arguments *arguments = state->input;
+
+    switch (key)
+    {
+    case 'f':
+        arguments->file = arg;
+        break;
+    case 'r':
+        arguments->fps = atoi(arg);
+        if (arguments->fps != 30 && arguments->fps != 60)
+        {
+            argp_error(state, "FPS must be 30 or 60");
+        }
+        break;
+    case ARGP_KEY_ARG:
+        if (state->arg_num > 0)
+        {
+            argp_usage(state);
+        }
+        break;
+    case ARGP_KEY_END:
+        if (state->arg_num < 0)
+        {
+            argp_usage(state);
+        }
+        break;
+    default:
+        return ARGP_ERR_UNKNOWN;
+    }
+    return 0;
+}
+
+static struct argp argp = {options, parse_opt, args_doc, doc};
 
 void init_gui(int argc, char **argv)
 {
-    objects[0] = (struct obj *)malloc(sizeof(struct obj));
+    struct arguments arguments;
+
+    arguments.file = NULL;
+    arguments.fps = 60;
+
+    argp_parse(&argp, argc, argv, 0, 0, &arguments);
+
+    int fps_interval = (arguments.fps == 30) ? 33 : 16;
 
     GtkBuilder *builder;
     GtkWidget *window;
     gtk_init(&argc, &argv);
+    object = (struct obj *)malloc(sizeof(struct obj));
     builder = gtk_builder_new();
     gtk_builder_add_from_file(builder, "render.glade", NULL);
     window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
@@ -59,6 +124,15 @@ void init_gui(int argc, char **argv)
 
     g_object_unref(builder);
     gtk_widget_show(window);
+
+    if (arguments.file)
+    {
+        read_object(arguments.file, object);
+        rho = 3000.0;
+        gtk_revealer_set_reveal_child(global_revealer, TRUE);
+    }
+
+    (void)g_timeout_add(fps_interval, (GSourceFunc)timer_exe, window);
     gtk_main();
 }
 
@@ -73,7 +147,6 @@ gboolean configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, gpointe
     canvas_height = gtk_widget_get_allocated_height(widget);
     surface = gdk_window_create_similar_surface(gtk_widget_get_window(widget), CAIRO_CONTENT_COLOR, canvas_width, canvas_height);
     clear_surface();
-    gtk_widget_add_events(widget, GDK_BUTTON_PRESS_MASK | GDK_POINTER_MOTION_MASK | GDK_SCROLL_MASK);
     init_buffer(canvas_width, canvas_height);
     return TRUE;
 }
@@ -97,16 +170,9 @@ gboolean upload_button_clicked_cb(GtkWidget *widget, gpointer user_data)
         char *filename;
         GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
         filename = gtk_file_chooser_get_filename(chooser);
-        read_object(filename, objects[0]);
-        objects_amount = 1;
-        g_free(filename);
-
-        GdkEventMotion event;
-        event.x = 0;
-        event.y = 0;
-        rotateHandler(&event, &phi, &theta); // has to be called to initialize the object properly
+        read_object(filename, object);
         rho = 3000.0;
-
+        g_free(filename);
         draw_object_on_canvas(global_canvas);
         gtk_revealer_set_reveal_child(global_revealer, TRUE);
     }
@@ -115,75 +181,44 @@ gboolean upload_button_clicked_cb(GtkWidget *widget, gpointer user_data)
     return TRUE;
 }
 
-gboolean motion_notify_event_cb(GtkWidget *widget, GdkEventMotion *event, gpointer data)
-{
-    if (surface == NULL)
-        return FALSE;
-    if (event->state & GDK_BUTTON1_MASK)
-    {
-        rotateHandler(event, &phi, &theta);
-        draw_object_on_canvas(widget);
-    }
-    return TRUE;
-}
-
-gboolean scroll_cb(GtkWidget *widget, GdkEventScroll *event, gpointer data)
-{
-    switch (event->direction)
-    {
-    case GDK_SCROLL_UP:
-        d -= 20;
-        break;
-    case GDK_SCROLL_DOWN:
-        d += 20;
-        break;
-    case GDK_SCROLL_LEFT:
-        c1 -= 0.1;
-        break;
-    case GDK_SCROLL_RIGHT:
-        c1 += 0.1;
-        break;
-    case GDK_SCROLL_SMOOTH:
-        if (event->delta_y > 0)
-            d -= 20;
-        else
-            d += 20;
-        break;
-    }
-
-    draw_object_on_canvas(widget);
-    return TRUE;
-}
-
 gboolean on_zoom_slider_value_changed(GtkRange *range, gpointer user_data)
 {
     int zoom_value = (int)gtk_range_get_value(range);
     double zoom = (double)(zoom_value) / 100 - 0.5;
-    d = initial_d + initial_d * (zoom * 2);
-    GtkWidget *canvas = GTK_WIDGET(user_data);
-    draw_object_on_canvas(canvas);
+    change_scale(1 + (zoom * 2));
     return TRUE;
 }
 
 gboolean on_rotate_phi_slider_value_changed(GtkRange *range, gpointer user_data)
 {
-    int rotate_phi = (int)gtk_range_get_value(range);
-    phi = rotate_phi;
-    draw_object_on_canvas(global_canvas);
+    int rotate_beta = (int)gtk_range_get_value(range);
+    int beta = rotate_beta - current_y_beta;
+    rotate_around_y(beta, &rho, &theta, &phi);
+    current_y_beta = rotate_beta;
     return TRUE;
 }
 
 gboolean on_rotate_theta_slider_value_changed(GtkRange *range, gpointer user_data)
 {
-    int rotate_theta = (int)gtk_range_get_value(range);
-    theta = rotate_theta;
-    draw_object_on_canvas(global_canvas);
+    int rotate_gamma = (int)gtk_range_get_value(range);
+    int gamma = rotate_gamma - current_z_gamma;
+    rotate_around_z(gamma, &rho, &theta, &phi);
+    current_z_gamma = rotate_gamma;
+    return TRUE;
+}
+
+gboolean on_rotate_x_slider_value_changed(GtkRange *range, gpointer user_data)
+{
+    int rotate_alpha = (int)gtk_range_get_value(range);
+    int alpha = rotate_alpha - current_x_alpha;
+    rotate_around_x(alpha, &rho, &theta, &phi);
+    current_x_alpha = rotate_alpha;
     return TRUE;
 }
 
 void on_toggle_button_clicked(GtkButton *button, gpointer user_data)
 {
-    if (objects_amount == 0)
+    if (!is_object_loaded())
     {
         return;
     }
@@ -195,59 +230,20 @@ void on_toggle_button_clicked(GtkButton *button, gpointer user_data)
 void on_window_destroy()
 {
     if (surface)
+    {
         cairo_surface_destroy(surface);
+    }
     gtk_main_quit();
-}
-
-void rotateHandler(GdkEventMotion *event, double *theta, double *phi)
-{
-    static int prev_y = 0, prev_x = 0;
-    static int ycountpos = 0, xcountpos = 0, xcountneg = 0, ycountneg = 0;
-    int x = event->x, y = event->y;
-    int dx = x - prev_x, dy = dy - y;
-    prev_x = x;
-    prev_y = y;
-    if (dy > 0)
-        ycountpos++;
-    if (dy < 0)
-        ycountneg++;
-    if (dx > 0)
-        xcountpos++;
-    if (dx < 0)
-        xcountneg++;
-    if (ycountpos == 1)
-    {
-        *phi += 1;
-        ycountpos = 0;
-    }
-    if (ycountneg == 1)
-    {
-        *phi -= 1;
-        ycountneg = 0;
-    }
-    if (xcountpos == 1)
-    {
-        *theta += 1;
-        xcountpos = 0;
-    }
-    if (xcountneg == 1)
-    {
-        *theta -= 1;
-        xcountneg = 0;
-    }
 }
 
 void draw_object_on_canvas(GtkWidget *widget)
 {
     cairo_t *cr = cairo_create(surface);
     gdk_pixbuf_fill(buff, Background);
-
-    draw_objects(objects, objects_amount, Black, theta, phi, rho);
+    draw_obj(object, Black, theta, phi, rho);
     gdk_cairo_set_source_pixbuf(cr, buff, 5, 5);
     cairo_paint(cr);
-
-    // cairo_fill(cr); isn't necessary?
-
+    cairo_fill(cr);
     cairo_destroy(cr);
     gtk_widget_queue_draw(widget);
 }
@@ -261,37 +257,93 @@ void clear_surface(void)
     cairo_destroy(cr);
 }
 
-void cartesian_to_spherical(double x_deg, double y_deg, double z_deg, double *rho, double *theta, double *phi)
+float sperical_to_cartesian_x()
 {
-    // Convert input angles from degrees to radians
-    double x = cos(DEG_TO_RAD(x_deg));
-    double y = cos(DEG_TO_RAD(y_deg));
-    double z = cos(DEG_TO_RAD(z_deg));
-
-    // Calculate rho (magnitude of the vector)
-    *rho = sqrt(x * x + y * y + z * z) * 1000;
-
-    // Calculate theta (azimuthal angle) in radians and convert to degrees
-    *theta = RAD_TO_DEG(atan2(y, x));
-
-    // Calculate phi (polar angle) in radians and convert to degrees
-    *phi = RAD_TO_DEG(acos(z / *rho));
+    return rho * sin(DEG_TO_RAD(theta)) * cos(DEG_TO_RAD(phi));
 }
 
-void angles_to_spherical(double x_deg, double y_deg, double z_deg, double *theta_deg, double *phi_deg)
+float sperical_to_cartesian_y()
 {
-    // Convert angles from degrees to radians
-    double x_rad = DEG_TO_RAD(x_deg);
-    double y_rad = DEG_TO_RAD(y_deg);
-    double z_rad = DEG_TO_RAD(z_deg);
+    return rho * sin(DEG_TO_RAD(theta)) * sin(DEG_TO_RAD(phi));
+}
 
-    // Calculate unit vector components
-    double u_x = cos(y_rad) * cos(z_rad);
-    double u_y = sin(x_rad) * cos(z_rad);
-    double u_z = sin(z_rad);
+float sperical_to_cartesian_z()
+{
+    return rho * cos(DEG_TO_RAD(theta));
+}
 
-    // Calculate spherical angles
-    rho = 3000;
-    *theta_deg = RAD_TO_DEG(atan2(u_y, u_x)); // Azimuthal angle (XY-plane)
-    *phi_deg = RAD_TO_DEG(acos(u_z));         // Polar angle (from Z-axis)
+float cartesian_to_sperical_theta(int z)
+{
+    return RAD_TO_DEG(acos(z / rho));
+}
+
+float cartesian_to_sperical_phi(int x, int y)
+{
+    return RAD_TO_DEG(atan2(y, x));
+}
+
+void rotate_around_x(int alpha, double *rho, double *theta, double *phi)
+{
+    double x = sperical_to_cartesian_x();
+    double y = sperical_to_cartesian_y();
+    double z = sperical_to_cartesian_z();
+
+    double newX = x;
+    double newY = y * cos(DEG_TO_RAD(alpha)) - z * sin(DEG_TO_RAD(alpha));
+    double newZ = y * sin(DEG_TO_RAD(alpha)) + z * cos(DEG_TO_RAD(alpha));
+
+    *theta = cartesian_to_sperical_theta(newZ);
+    *phi = cartesian_to_sperical_phi(newX, newY);
+}
+
+void rotate_around_y(int alpha, double *rho, double *theta, double *phi)
+{
+    double x = sperical_to_cartesian_x();
+    double y = sperical_to_cartesian_y();
+    double z = sperical_to_cartesian_z();
+
+    double newX = x * cos(DEG_TO_RAD(alpha)) + z * sin(DEG_TO_RAD(alpha));
+    double newY = y;
+    double newZ = -x * sin(DEG_TO_RAD(alpha)) + z * cos(DEG_TO_RAD(alpha));
+
+    *theta = cartesian_to_sperical_theta(newZ);
+    *phi = cartesian_to_sperical_phi(newX, newY);
+}
+
+void rotate_around_z(int alpha, double *rho, double *theta, double *phi)
+{
+    double x = sperical_to_cartesian_x();
+    double y = sperical_to_cartesian_y();
+    double z = sperical_to_cartesian_z();
+
+    double newX = x * cos(DEG_TO_RAD(alpha)) - y * sin(DEG_TO_RAD(alpha));
+    double newY = x * sin(DEG_TO_RAD(alpha)) + y * cos(DEG_TO_RAD(alpha));
+    double newZ = z;
+
+    *theta = cartesian_to_sperical_theta(newZ);
+    *phi = cartesian_to_sperical_phi(newX, newY);
+}
+
+gboolean is_object_loaded()
+{
+    return object->ntr > 0;
+}
+
+gboolean timer_exe(GtkWidget *window)
+{
+    static gboolean first_execution = TRUE;
+    if (!is_object_loaded())
+    {
+        return TRUE;
+    }
+
+    int drawing_status = g_atomic_int_get(&currently_drawing);
+    if (drawing_status == 0)
+    {
+        g_atomic_int_set(&currently_drawing, 1);
+        draw_object_on_canvas(global_canvas);
+        g_atomic_int_set(&currently_drawing, 0);
+    }
+
+    return TRUE;
 }

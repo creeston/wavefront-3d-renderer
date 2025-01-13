@@ -225,6 +225,44 @@
                             <property name="position">2</property>
                           </packing>
                         </child>
+                        <child>
+                          <object class="GtkBox" id="rotate_x_box">
+                            <property name="visible">True</property>
+                            <property name="can-focus">False</property>
+                            <property name="orientation">vertical</property>
+                            <child>
+                              <object class="GtkLabel" id="rotate_x_label">
+                                <property name="visible">True</property>
+                                <property name="can-focus">False</property>
+                                <property name="label" translatable="yes">Rotate X:</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">0</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <object class="GtkScale" id="rotate_x_slider">
+                                <property name="visible">True</property>
+                                <property name="can-focus">False</property>
+                                <property name="adjustment">adjustment4</property>
+                                <property name="round-digits">0</property>
+                                <signal name="value-changed" handler="on_rotate_x_slider_value_changed" swapped="no"/>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">1</property>
+                              </packing>
+                            </child>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">3</property>
+                          </packing>
+                        </child>
                       </object>
                     </child>
                   </object>
@@ -242,8 +280,6 @@
                 <property name="can-focus">False</property>
                 <signal name="configure-event" handler="configure_event_cb" swapped="no"/>
                 <signal name="draw" handler="draw_cb" swapped="no"/>
-                <signal name="motion-notify-event" handler="motion_notify_event_cb" swapped="no"/>
-                <signal name="scroll-event" handler="scroll_cb" swapped="no"/>
               </object>
               <packing>
                 <property name="expand">True</property>

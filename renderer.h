@@ -37,8 +37,7 @@ struct v3D
 };
 
 void read_object(char *filename, struct obj *object);
-void draw_obj(struct obj *object, struct color C, double theta, double phi);
-void draw_objects(struct obj **object, int objects_amount, struct color C, double theta, double phi, double rho);
+void draw_obj(struct obj *object, struct color C, double theta, double phi, double rho);
 void draw_triangle(struct tr *triangle, int ntr, struct ver *vertex, struct color Cl);
 void init_z_buffer();
 void calculate_vertexes(struct ver *fvertex, struct ver **vertex, int nvr, double *Range);
@@ -57,10 +56,11 @@ void rast_line(struct v2D A, struct v2D B, struct v2D C, struct color Cl);
 void swapS(struct v2D *A, struct v2D *B);
 void move_obj_relative(struct obj *object, int dx, int dy, int dz);
 void move_obj_absolute(struct obj *object, int x, int y, int z);
+void change_scale(float scale);
 
 extern struct color Red;
 extern struct color Black;
 extern int Background;
 extern struct v3D lightdir;
-extern double v11, v12, v13, v21, v22, v23, v32, v33, v43, d, initial_d, c1, c2, onetime, Xvp_range, Yvp_range, eps, meps, oneminus, oneplus;
+extern double v11, v12, v13, v21, v22, v23, v32, v33, v43, c1, c2, onetime, Xvp_range, Yvp_range, eps, meps, oneminus, oneplus;
 extern int *zbuffer;
