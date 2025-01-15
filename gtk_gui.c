@@ -182,7 +182,7 @@ void on_window_destroy()
 void draw_object_on_canvas(GtkWidget *widget)
 {
     fill_buffer(Background);
-    draw_obj(object, Black, theta, phi, rho);
+    render_obj(object, Black, theta, phi, rho);
 
     cairo_t *cr = cairo_create(surface);
     set_pixbuf_for_surface(cr);

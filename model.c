@@ -168,9 +168,9 @@ void read_face(char *str, struct triangle **triangle, int *ntr)
         else
             *triangle = (struct triangle *)realloc(*triangle, (*ntr + 1) * sizeof(struct triangle));
 
-        (*triangle + *ntr)->A = A;
-        (*triangle + *ntr)->B = B;
-        (*triangle + *ntr)->C = C;
+        (*triangle + *ntr)->vertex_a = A;
+        (*triangle + *ntr)->vertex_b = B;
+        (*triangle + *ntr)->vertex_c = C;
         (*triangle + *ntr)->first = first;
         *ntr += 1;
         ++i1;

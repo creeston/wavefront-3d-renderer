@@ -7,14 +7,15 @@ struct vertice
 
 struct triangle
 {
-    int A, B, C;
+    int vertex_a, vertex_b, vertex_c;
     double a, b, c, h;
     int first;
 };
 
 struct obj
 {
-    struct vertice *fvertex, *vertex;
+    struct vertice *fvertex;
+    struct vertice *vertex;
     int nvr;
     struct triangle *triangle;
     int ntr;
