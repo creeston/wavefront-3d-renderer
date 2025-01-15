@@ -4,43 +4,46 @@
 
 #define sqr(x) ((x) * (x))
 
-struct v2D
+struct vertice_2d
 {
     int x, y;
     float depth;
 };
 
-struct v3D
+struct vector_3d
 {
     double x, y, z;
 };
 
-struct v3D lightdir = {0, 0, 1};
-double v11, v12, v13, v21, v22, v23, v32, v33, v43, d, c1, c2, onetime = 1, Xvp_range, Yvp_range;
+struct vector_3d light_direction = {0, 0, 1};
+double v11, v12, v13, v21, v22, v23, v32, v33, v43, d, c1, c2, onetime = 1;
 double initial_d = 0;
 double eps = 1.e-5, meps = -1.e-5, oneminus = 1 - 1.e-5, oneplus = 1 + 1.e-5;
 int *zbuffer;
+double x_viewpoint_range, y_viewpoint_range;
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
+#define BIG_INT 2147483647
+
 #define DEG_TO_RAD(deg) ((deg) * M_PI / 180.0)
 #define RAD_TO_DEG(rad) ((rad) * 180.0 / M_PI)
 
-void rast_triangles(struct v2D A, struct v2D B, struct v2D C, struct color Cl);
-void draw_triangle(struct triangle *triangle, int ntr, struct vertice *vertex, struct color Cl);
-void init_z_buffer();
+void rasterize_triangle(struct vertice_2d A, struct vertice_2d B, struct vertice_2d C, struct color Cl);
+void render_triangles(struct triangle *triangle, int ntr, struct vertice *vertex, struct color Cl);
+void initialize_z_buffer();
 void calculate_vertexes(struct vertice *fvertex, struct vertice **vertex, int nvr, double *Range);
 void calculate_scale(double Xmin, double Xmax, double Ymin, double Ymax);
 void calculate_triangles(struct vertice *vertex, struct triangle **triangle, int ntr, int nvr);
 int proect_coordinate(char flag, struct vertice *vertex, int num);
-void normalize_vector(struct v3D *vec);
+void normalize_vector(struct vector_3d *vec);
 void viewing(double x, double xO, double y, double yO, double z, double zO, double *pxe, double *pye, double *pze);
 void count_coefficients(double rho, double theta, double phi);
-void update_z_buffer();
+void reset_z_buffer();
 
-void swapS(struct v2D *A, struct v2D *B)
+void swap_vertices(struct vertice_2d *A, struct vertice_2d *B)
 {
     int xaux, yaux;
     xaux = A->x;
@@ -57,76 +60,87 @@ void swapS(struct v2D *A, struct v2D *B)
     B->depth = aux;
 }
 
-void draw_obj(struct obj *object, struct color C, double theta, double phi, double rho)
+void initialize_renderer()
 {
-    update_z_buffer();
+    x_viewpoint_range = x_viewpoint_max - x_viewpoint_min;
+    y_viewpoint_range = y_viewpoint_max - y_viewpoint_min;
+    initialize_z_buffer();
+}
+
+void draw_obj(struct obj *object, struct color color, double theta, double phi, double rho)
+{
+    reset_z_buffer();
+
     struct vertice **fvertex = &(object->fvertex);
     struct vertice **vertex = &(object->vertex);
     int nvr = object->nvr;
-
     struct triangle **triangle = &object->triangle;
     int ntr = object->ntr;
-
-    double Range[4] = {BIG, -BIG, BIG, -BIG};
+    double range[4] = {BIG, -BIG, BIG, -BIG};
     count_coefficients(rho, theta, phi);
-
-    calculate_vertexes(*fvertex, vertex, nvr, Range);
+    calculate_vertexes(*fvertex, vertex, nvr, range);
 
     if (onetime)
     {
-        calculate_scale(Range[0], Range[1], Range[2], Range[3]);
-        init_z_buffer();
+        calculate_scale(range[0], range[1], range[2], range[3]);
     }
     onetime = 0;
 
     calculate_triangles(*vertex, triangle, ntr, nvr);
-    draw_triangle(*triangle, ntr, *vertex, C);
+    render_triangles(*triangle, ntr, *vertex, color);
 }
 
-void draw_triangle(struct triangle *triangle, int ntr, struct vertice *vertex, struct color Cl)
+void render_triangles(struct triangle *triangles, int ntr, struct vertice *vertices, struct color color)
 {
-    int i, XA, YA, XB, YB, XC, YC, A, B, C;
-    double a, b, c, h, intensity;
-    normalize_vector(&lightdir);
-    for (i = 0; i < ntr; ++i)
+    normalize_vector(&light_direction);
+    for (int i = 0; i < ntr; ++i)
     {
-        a = triangle[i].a;
-        b = triangle[i].b;
-        c = triangle[i].c;
-        h = triangle[i].h;
-        A = triangle[i].A;
-        B = triangle[i].B;
-        C = triangle[i].C;
+        double a = triangles[i].a;
+        double b = triangles[i].b;
+        double c = triangles[i].c;
+        double h = triangles[i].h;
+        int A = triangles[i].A;
+        int B = triangles[i].B;
+        int C = triangles[i].C;
 
-        intensity = lightdir.x * a + lightdir.y * b + lightdir.z * c;
+        double intensity = light_direction.x * a + light_direction.y * b + light_direction.z * c;
         if (h > 0 && intensity > 0)
         {
-            struct color rgb = {intensity * Cl.r, intensity * Cl.g, intensity * Cl.b};
+            struct color rgb = {intensity * color.r, intensity * color.g, intensity * color.b};
 
             if (A > ntr || B > ntr || C > ntr)
+            {
                 continue;
-            XA = proect_coordinate('x', vertex, A);
-            YA = proect_coordinate('y', vertex, A);
-            XB = proect_coordinate('x', vertex, B);
-            YB = proect_coordinate('y', vertex, B);
-            XC = proect_coordinate('x', vertex, C);
-            YC = proect_coordinate('y', vertex, C);
+            }
 
-            struct v2D vA = {XA, YA, vertex[A].z};
-            struct v2D vB = {XB, YB, vertex[B].z};
-            struct v2D vC = {XC, YC, vertex[C].z};
+            int XA = proect_coordinate('x', vertices, A);
+            int YA = proect_coordinate('y', vertices, A);
+            int XB = proect_coordinate('x', vertices, B);
+            int YB = proect_coordinate('y', vertices, B);
+            int XC = proect_coordinate('x', vertices, C);
+            int YC = proect_coordinate('y', vertices, C);
 
-            rast_triangles(vA, vB, vC, rgb);
+            struct vertice_2d vA = {XA, YA, vertices[A].z};
+            struct vertice_2d vB = {XB, YB, vertices[B].z};
+            struct vertice_2d vC = {XC, YC, vertices[C].z};
+
+            rasterize_triangle(vA, vB, vC, rgb);
         }
     }
 }
 
-void init_z_buffer()
+void initialize_z_buffer()
 {
-    int i;
-    zbuffer = (int *)malloc((Xvp_range + 1) * (Yvp_range + 1) * sizeof(int));
-    for (i = 0; i < (Xvp_range + 1) * (Yvp_range + 1); ++i)
-        *(zbuffer + i) = 20000;
+    if (zbuffer != NULL)
+    {
+        free(zbuffer);
+    }
+
+    zbuffer = (int *)malloc((x_viewpoint_range + 1) * (y_viewpoint_range + 1) * sizeof(int));
+    for (int i = 0; i < (x_viewpoint_range + 1) * (y_viewpoint_range + 1); i++)
+    {
+        *(zbuffer + i) = BIG_INT;
+    }
 }
 
 void calculate_vertexes(struct vertice *fvertex, struct vertice **vertex, int nvr, double *Range)
@@ -160,29 +174,30 @@ void calculate_vertexes(struct vertice *fvertex, struct vertice **vertex, int nv
         (*vertex + i)->y = ye;
         (*vertex + i)->z = ze;
         if ((*vertex + i) == NULL)
+        {
             printf("some kind of error\n");
+        }
     }
 }
 
 void calculate_scale(double Xmin, double Xmax, double Ymin, double Ymax)
 {
-    double fx, fy, Xcentre, Ycentre, Xvp_centre, Yvp_centre;
+    double fx, fy, Xcentre, Ycentre;
     double Xrange, Yrange;
 
     Xrange = Xmax - Xmin;
     Yrange = Ymax - Ymin;
-    Xvp_range = x_viewpoint_max - x_viewpoint_min;
-    Yvp_range = y_viewpoint_max - y_viewpoint_min;
-    fx = Xvp_range / Xrange;
-    fy = Yvp_range / Yrange;
+
+    fx = x_viewpoint_range / Xrange;
+    fy = y_viewpoint_range / Yrange;
     d = (fx < fy) ? fx : fy;
     initial_d = d;
     Xcentre = (Xmin + Xmax) / 2;
     Ycentre = (Ymax + Ymin) / 2;
-    Xvp_centre = (x_viewpoint_min + x_viewpoint_max) / 2;
-    Yvp_centre = (y_viewpoint_min + y_viewpoint_max) / 2;
-    c1 = Xvp_centre - d * Xcentre;
-    c2 = Yvp_centre - d * Ycentre;
+    double x_viewpoint_center = (x_viewpoint_min + x_viewpoint_max) / 2;
+    double y_viewpoint_center = (y_viewpoint_min + y_viewpoint_max) / 2;
+    c1 = x_viewpoint_center - d * Xcentre;
+    c2 = y_viewpoint_center - d * Ycentre;
 }
 
 void calculate_triangles(struct vertice *vertex, struct triangle **triangle, int ntr, int nvr)
@@ -194,13 +209,12 @@ void calculate_triangles(struct vertice *vertex, struct triangle **triangle, int
         A = (*triangle + i)->A;
         B = (*triangle + i)->B;
         C = (*triangle + i)->C;
-        /*После выполнения функции RotateObj / MoveObj обьект, видимо, немного повреждается
-        и некоторые значения номеров треугольников очень сильно меняются
-        поэтому необходима проверка их соотвествия действительности, иначе - SegFault*/
+
         if (A > nvr || A < 0 || B > nvr || B < 0 || C > nvr || C < 0)
         {
             continue;
         }
+
         if ((vertex + A) == NULL || (vertex + B) == NULL || (vertex + C) == NULL)
         {
             continue;
@@ -247,44 +261,41 @@ void calculate_triangles(struct vertice *vertex, struct triangle **triangle, int
     }
 }
 
-void rast_triangles(struct v2D A, struct v2D B, struct v2D C, struct color Cl)
+void rasterize_triangle(struct vertice_2d v1, struct vertice_2d v2, struct vertice_2d v3, struct color color)
 {
-    if (A.y == B.y && A.y == C.y)
+    if (v1.y == v2.y && v1.y == v3.y)
     {
         return;
     }
-    if (A.y > B.y)
+    if (v1.y > v2.y)
     {
-        swapS(&A, &B);
+        swap_vertices(&v1, &v2);
     }
-    if (A.y > C.y)
+    if (v1.y > v3.y)
     {
-        swapS(&A, &C);
+        swap_vertices(&v1, &v3);
     }
-    if (B.y > C.y)
+    if (v2.y > v3.y)
     {
-        swapS(&B, &C);
+        swap_vertices(&v2, &v3);
     }
 
-    int total_height = C.y - A.y, i, second_half, j, idx, segment_height;
-    float alpha, beta, phi;
-    double xI, yI, zI, xJ, yJ, zJ, Pz;
-    long double time_spent_on_calculating = 0, time_spent_on_drawing = 0;
-    for (i = 0; i <= total_height; ++i)
+    int total_height = v3.y - v1.y;
+    for (int i = 0; i <= total_height; ++i)
     {
-        second_half = i > B.y - A.y || B.y == A.y;
-        segment_height = second_half ? C.y - B.y : B.y - A.y;
+        int second_half = i > v2.y - v1.y || v2.y == v1.y;
+        int segment_height = second_half ? v3.y - v2.y : v2.y - v1.y;
 
-        alpha = (float)(i) / total_height;
-        beta = (float)(i - (second_half ? B.y - A.y : 0)) / segment_height;
+        double alpha = (float)(i) / total_height;
+        double beta = (float)(i - (second_half ? v2.y - v1.y : 0)) / segment_height;
 
-        xI = alpha * C.x + A.x * (1 - alpha);
-        yI = alpha * C.y + A.y * (1 - alpha);
-        zI = alpha * C.depth + A.depth * (1 - alpha);
+        double xI = alpha * v3.x + v1.x * (1 - alpha);
+        double yI = alpha * v3.y + v1.y * (1 - alpha);
+        double zI = alpha * v3.depth + v1.depth * (1 - alpha);
 
-        xJ = second_half ? (beta * C.x + B.x * (1 - beta)) : beta * B.x + A.x * (1 - beta);
-        yJ = second_half ? (beta * C.y + B.y * (1 - beta)) : beta * B.y + A.y * (1 - beta);
-        zJ = second_half ? (beta * C.depth + B.depth * (1 - beta)) : beta * B.depth + A.depth * (1 - beta);
+        double xJ = second_half ? (beta * v3.x + v2.x * (1 - beta)) : beta * v2.x + v1.x * (1 - beta);
+        double yJ = second_half ? (beta * v3.y + v2.y * (1 - beta)) : beta * v2.y + v1.y * (1 - beta);
+        double zJ = second_half ? (beta * v3.depth + v2.depth * (1 - beta)) : beta * v2.depth + v1.depth * (1 - beta);
 
         if (xI > xJ)
         {
@@ -292,22 +303,40 @@ void rast_triangles(struct v2D A, struct v2D B, struct v2D C, struct color Cl)
             swap_doubles(&yI, &yJ);
         }
 
-        for (j = xI; j <= xJ; ++j)
+        int y = v1.y + i;
+        for (int x = xI; x <= xJ; ++x)
         {
-            if (j <= (x_viewpoint_min) || j >= (x_viewpoint_max) || (A.y + i) <= (y_viewpoint_min) || (A.y + i) >= (y_viewpoint_max))
-                continue;
-            phi = xJ == xI ? 1. : (float)(j - xI) / (float)(xJ - xI);
-            Pz = zI + (zJ - zI) * phi;
-            idx = j + Yvp_range * (A.y + i);
-            if ((zbuffer + idx) == NULL || idx < 0 || idx > (Xvp_range + 1) * (Yvp_range + 1))
+            if (x <= x_viewpoint_min || x >= x_viewpoint_max || y <= y_viewpoint_min || y >= y_viewpoint_max)
             {
                 continue;
             }
-            else if (*(zbuffer + idx) > Pz && *(zbuffer + idx) <= 20000 && *(zbuffer + idx) > -1000)
+
+            int pixel_index = x + y_viewpoint_range * y;
+            if (pixel_index < 0)
             {
-                draw_pixel(j, A.y + i, Cl);
-                *(zbuffer + idx) = Pz;
+                printf("Error: pixel index is negative\n");
+                continue;
             }
+
+            if ((zbuffer + pixel_index) == NULL)
+            {
+                printf("Error: zbuffer is NULL at index %d\n", pixel_index);
+                continue;
+            }
+
+            double phi = xJ == xI ? 1. : (float)(x - xI) / (float)(xJ - xI); // ranges from 0 to 1 depending on current x
+            int pixel_z_value = zI + (zJ - zI) * phi;                        // interpolate z value
+            int current_z_value = *(zbuffer + pixel_index);
+
+            // For some reason, the z-buffer is not working properly, resulting in skipped polygons
+            if (current_z_value <= pixel_z_value)
+            {
+                // Pixel is behind the current pixel, therefore skip it
+                continue;
+            }
+
+            draw_pixel(x, y, color);
+            *(zbuffer + pixel_index) = pixel_z_value;
         }
     }
 }
@@ -325,7 +354,7 @@ int proect_coordinate(char flag, struct vertice *vertex, int num)
     }
 }
 
-void normalize_vector(struct v3D *vec)
+void normalize_vector(struct vector_3d *vec)
 {
     double r;
     r = sqrt(sqr(vec->x) + sqr(vec->y) + sqr(vec->z));
@@ -363,13 +392,11 @@ void count_coefficients(double rho, double theta, double phi)
     v43 = rho;
 }
 
-void update_z_buffer()
+void reset_z_buffer()
 {
-    int i;
-    for (i = 0; i < (Xvp_range + 1) * (Yvp_range + 1); ++i)
+    for (int i = 0; i < (x_viewpoint_range + 1) * (y_viewpoint_range + 1); i++)
     {
-        if ((zbuffer + i) != NULL)
-            *(zbuffer + i) = 20000;
+        *(zbuffer + i) = BIG_INT;
     }
 }
 

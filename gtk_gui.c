@@ -50,6 +50,7 @@ int Background = 0xffffffff;
 void init_gui(struct arguments arguments, int argc, char **argv)
 {
     int fps_interval = (arguments.fps == 30) ? 33 : 16;
+    fps_interval = 1000;
 
     GtkBuilder *builder;
     GtkWidget *window;
@@ -91,7 +92,8 @@ gboolean configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, gpointe
     canvas_height = gtk_widget_get_allocated_height(widget);
     surface = gdk_window_create_similar_surface(gtk_widget_get_window(widget), CAIRO_CONTENT_COLOR, canvas_width, canvas_height);
     clear_surface();
-    init_buffer(canvas_width, canvas_height);
+    initialize_canvas_buffer(canvas_width, canvas_height);
+    initialize_renderer(canvas_width, canvas_height);
     return TRUE;
 }
 

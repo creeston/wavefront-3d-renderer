@@ -9,7 +9,7 @@ guchar *pixels;
 int rowstride, n_channels;
 int x_viewpoint_min, x_viewpoint_max, y_viewpoint_min, y_viewpoint_max;
 
-void init_buffer(int canvas_width, int canvas_height)
+void initialize_canvas_buffer(int canvas_width, int canvas_height)
 {
     y_viewpoint_min = 0;
     x_viewpoint_min = 0;
@@ -30,6 +30,7 @@ gboolean draw_pixel(int x, int y, struct color color)
 {
     if (pixels == NULL)
     {
+        printf("Buffer not initialized\n");
         return FALSE;
     }
 
