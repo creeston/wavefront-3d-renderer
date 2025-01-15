@@ -1,5 +1,6 @@
 #include <cairo.h>
 #include <gtk/gtk.h>
+#include <assert.h>
 
 #include "canvas_drawing.h"
 #include "utils.h"
@@ -26,20 +27,14 @@ void initialize_canvas_buffer(int canvas_width, int canvas_height)
     pixels = gdk_pixbuf_get_pixels(pixel_buffer);
 }
 
-gboolean draw_pixel(int x, int y, struct color color)
+void draw_pixel(int x, int y, struct color color)
 {
-    if (pixels == NULL)
-    {
-        printf("Buffer not initialized\n");
-        return FALSE;
-    }
+    assert(pixels != NULL);
 
     guchar *p = pixels + y * rowstride + x * n_channels;
     p[0] = color.r;
     p[1] = color.g;
     p[2] = color.b;
-
-    return TRUE;
 }
 
 void clear_buffer()

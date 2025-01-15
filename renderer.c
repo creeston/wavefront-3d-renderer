@@ -1,6 +1,7 @@
 #include "renderer.h"
 #include "utils.h"
 #include <string.h>
+#include <assert.h>
 
 #define sqr(x) ((x) * (x))
 
@@ -31,8 +32,8 @@ double x_viewpoint_range, y_viewpoint_range;
 #define DEG_TO_RAD(deg) ((deg) * M_PI / 180.0)
 #define RAD_TO_DEG(rad) ((rad) * 180.0 / M_PI)
 
-void rasterize_triangle(struct vertice_2d A, struct vertice_2d B, struct vertice_2d C, struct color Cl);
-void render_triangles(struct triangle *triangle, int ntr, struct vertice *vertex, struct color Cl);
+void rasterize_triangle(struct vertice_2d A, struct vertice_2d B, struct vertice_2d C, struct color color);
+void render_triangles(struct triangle *triangle, int ntr, struct vertice *vertex, struct color color);
 void initialize_z_buffer();
 void calculate_vertexes(struct vertice *fvertex, struct vertice **vertex, int nvr, double *Range);
 void calculate_scale(double Xmin, double Xmax, double Ymin, double Ymax);
@@ -136,8 +137,9 @@ void initialize_z_buffer()
         free(zbuffer);
     }
 
-    zbuffer = (int *)malloc((x_viewpoint_range + 1) * (y_viewpoint_range + 1) * sizeof(int));
-    for (int i = 0; i < (x_viewpoint_range + 1) * (y_viewpoint_range + 1); i++)
+    int buffer_length = (x_viewpoint_range + 1) * (y_viewpoint_range + 1);
+    zbuffer = (int *)malloc(buffer_length * sizeof(int));
+    for (int i = 0; i < buffer_length; i++)
     {
         *(zbuffer + i) = BIG_INT;
     }
@@ -311,27 +313,15 @@ void rasterize_triangle(struct vertice_2d v1, struct vertice_2d v2, struct verti
                 continue;
             }
 
-            int pixel_index = x + y_viewpoint_range * y;
-            if (pixel_index < 0)
-            {
-                printf("Error: pixel index is negative\n");
-                continue;
-            }
-
-            if ((zbuffer + pixel_index) == NULL)
-            {
-                printf("Error: zbuffer is NULL at index %d\n", pixel_index);
-                continue;
-            }
+            int pixel_index = x + x_viewpoint_range * y;
+            assert(pixel_index >= 0);
 
             double phi = xJ == xI ? 1. : (float)(x - xI) / (float)(xJ - xI); // ranges from 0 to 1 depending on current x
             int pixel_z_value = zI + (zJ - zI) * phi;                        // interpolate z value
             int current_z_value = *(zbuffer + pixel_index);
 
-            // For some reason, the z-buffer is not working properly, resulting in skipped polygons
-            if (current_z_value <= pixel_z_value)
+            if (current_z_value <= pixel_z_value) // then pixel is behind the current one
             {
-                // Pixel is behind the current pixel, therefore skip it
                 continue;
             }
 
@@ -394,7 +384,8 @@ void count_coefficients(double rho, double theta, double phi)
 
 void reset_z_buffer()
 {
-    for (int i = 0; i < (x_viewpoint_range + 1) * (y_viewpoint_range + 1); i++)
+    int buffer_length = (x_viewpoint_range + 1) * (y_viewpoint_range + 1);
+    for (int i = 0; i < buffer_length; i++)
     {
         *(zbuffer + i) = BIG_INT;
     }

@@ -8,7 +8,7 @@ struct color
     int r, g, b;
 };
 
-gboolean draw_pixel(int x, int y, struct color clr);
+void draw_pixel(int x, int y, struct color clr);
 void clear_buffer();
 void initialize_canvas_buffer(int canvas_width, int canvas_height);
 void fill_buffer(int color);

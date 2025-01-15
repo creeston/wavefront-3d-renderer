@@ -50,7 +50,6 @@ int Background = 0xffffffff;
 void init_gui(struct arguments arguments, int argc, char **argv)
 {
     int fps_interval = (arguments.fps == 30) ? 33 : 16;
-    fps_interval = 1000;
 
     GtkBuilder *builder;
     GtkWidget *window;
