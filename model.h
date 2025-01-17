@@ -8,7 +8,6 @@ struct obj_vertex
 struct obj_triangle
 {
     int vertex_a, vertex_b, vertex_c;
-    double a, b, c, h;
     int first;
 };
 

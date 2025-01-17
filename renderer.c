@@ -14,6 +14,11 @@ struct vector_3d
     double x, y, z;
 };
 
+struct triangle_vector
+{
+    double a, b, c, h;
+};
+
 struct vector_3d light_direction = {0, 0, 1};
 double v11, v12, v13, v21, v22, v23, v32, v33, v43;
 double d;
@@ -38,12 +43,12 @@ double theta, phi, rho = 3000;
 #define SQR(x) ((x) * (x))
 
 void rasterize_triangle(struct vertice_2d A, struct vertice_2d B, struct vertice_2d C, struct color color);
-void render_triangles(struct obj_triangle *triangles, int number_of_triangles, struct vector_3d *vertices, int number_of_vertices, struct color color);
-void render_triangle(struct obj_triangle triangle, struct vector_3d *vertices, int number_of_vertices, struct color color);
+void render_triangles(struct obj_triangle *triangles, struct triangle_vector *triangle_vectors, int number_of_triangles, struct vector_3d *vertices, int number_of_vertices, struct color color);
+void render_triangle(struct obj_triangle triangle, struct triangle_vector triangle_vector, struct vector_3d *vertices, int number_of_vertices, struct color color);
 void initialize_z_buffer();
 struct vector_3d *calculate_rotated_vertices(struct obj_vertex *object_vertices, int number_of_vertices);
 void calculate_scale(struct vector_3d *vertices, int number_of_vertices);
-void calculate_triangles(struct vector_3d *vertex, struct obj_triangle *triangle, int ntr, int nvr);
+struct triangle_vector *calculate_triangles(struct vector_3d *vertex, struct obj_triangle *triangle, int ntr, int nvr);
 int project_x_coordinate(struct vector_3d vertex);
 int project_y_coordinate(struct vector_3d vertex);
 struct vertice_2d project_vertex(struct vector_3d vertex);
@@ -77,6 +82,7 @@ void render(struct obj *object, struct color color)
     int number_of_triangles = object->number_of_triangles;
 
     struct vector_3d *vertices = calculate_rotated_vertices(object_vertices, number_of_vertices);
+    struct triangle_vector *triangle_vectors = calculate_triangles(vertices, object_triangles, number_of_triangles, number_of_vertices);
 
     if (previsouly_rendered_object != object)
     {
@@ -84,27 +90,29 @@ void render(struct obj *object, struct color color)
         calculate_scale(vertices, number_of_vertices);
     }
 
-    calculate_triangles(vertices, object_triangles, number_of_triangles, number_of_vertices);
-    reset_z_buffer();
-    render_triangles(object_triangles, number_of_triangles, vertices, number_of_vertices, color);
+    render_triangles(object_triangles, triangle_vectors, number_of_triangles, vertices, number_of_vertices, color);
+
     free(vertices);
+    free(triangle_vectors);
 }
 
-void render_triangles(struct obj_triangle *triangles, int number_of_triangles, struct vector_3d *vertices, int number_of_vertices, struct color color)
+void render_triangles(struct obj_triangle *triangles, struct triangle_vector *triangle_vectors, int number_of_triangles, struct vector_3d *vertices, int number_of_vertices, struct color color)
 {
+    reset_z_buffer();
     normalize_vector(&light_direction);
     for (int i = 0; i < number_of_triangles; ++i)
     {
-        render_triangle(triangles[i], vertices, number_of_vertices, color);
+        render_triangle(triangles[i], triangle_vectors[i], vertices, number_of_vertices, color);
     }
 }
 
-void render_triangle(struct obj_triangle triangle, struct vector_3d *vertices, int number_of_vertices, struct color color)
+void render_triangle(struct obj_triangle triangle, struct triangle_vector triangle_vector, struct vector_3d *vertices, int number_of_vertices, struct color color)
 {
-    double a = triangle.a;
-    double b = triangle.b;
-    double c = triangle.c;
-    double h = triangle.h;
+    double a = triangle_vector.a;
+    double b = triangle_vector.b;
+    double c = triangle_vector.c;
+    double h = triangle_vector.h;
+
     int vertex_a_idx = triangle.vertex_a;
     int vertex_b_idx = triangle.vertex_b;
     int vertex_c_idx = triangle.vertex_c;
@@ -202,27 +210,30 @@ void calculate_scale(struct vector_3d *vertices, int number_of_vertices)
 
     double fx = x_viewpoint_range / x_range;
     double fy = y_viewpoint_range / y_range;
-    d = (fx < fy) ? fx : fy;
-    initial_d = d;
     double x_center = (x_min + x_max) / 2;
     double y_center = (y_max + y_min) / 2;
     double x_viewpoint_center = (x_viewpoint_min + x_viewpoint_max) / 2;
     double y_viewpoint_center = (y_viewpoint_min + y_viewpoint_max) / 2;
+
+    d = (fx < fy) ? fx : fy;
+    initial_d = d;
     c1 = x_viewpoint_center - d * x_center;
     c2 = y_viewpoint_center - d * y_center;
 }
 
-void calculate_triangles(struct vector_3d *vertices, struct obj_triangle *triangles, int ntr, int nvr)
+struct triangle_vector *calculate_triangles(struct vector_3d *vertices, struct obj_triangle *triangles, int number_of_triangles, int number_of_vertices)
 {
+    struct triangle_vector *triangle_vectors = (struct triangle_vector *)malloc(number_of_triangles * sizeof(struct triangle_vector));
+
     double xA, yA, zA, xB, yB, zB, xC, yC, zC, a, b, c, h, r;
     int i, j, A, B, C;
-    for (i = 0; i < ntr; ++i)
+    for (i = 0; i < number_of_triangles; ++i)
     {
         A = triangles[i].vertex_a;
         B = triangles[i].vertex_b;
         C = triangles[i].vertex_c;
 
-        if (A > nvr || A < 0 || B > nvr || B < 0 || C > nvr || C < 0)
+        if (A > number_of_vertices || A < 0 || B > number_of_vertices || B < 0 || C > number_of_vertices || C < 0)
         {
             continue;
         }
@@ -255,10 +266,10 @@ void calculate_triangles(struct vector_3d *vertices, struct obj_triangle *triang
             c /= r;
             h /= r;
 
-            triangles[i].a = a;
-            triangles[i].b = b;
-            triangles[i].c = c;
-            triangles[i].h = h;
+            triangle_vectors[i].a = a;
+            triangle_vectors[i].b = b;
+            triangle_vectors[i].c = c;
+            triangle_vectors[i].h = h;
         }
         else
         {
@@ -267,12 +278,14 @@ void calculate_triangles(struct vector_3d *vertices, struct obj_triangle *triang
             {
                 --j;
             }
-            triangles[i].a = triangles[j].a;
-            triangles[i].b = triangles[j].b;
-            triangles[i].c = triangles[j].c;
-            triangles[i].h = triangles[j].h;
+            triangle_vectors[i].a = triangle_vectors[j].a;
+            triangle_vectors[i].b = triangle_vectors[j].b;
+            triangle_vectors[i].c = triangle_vectors[j].c;
+            triangle_vectors[i].h = triangle_vectors[j].h;
         }
     }
+
+    return triangle_vectors;
 }
 
 void rasterize_triangle(struct vertice_2d v1, struct vertice_2d v2, struct vertice_2d v3, struct color color)
