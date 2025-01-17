@@ -6,6 +6,7 @@
 void read_vertex(char *str, struct obj_vertex **fvertex, int *nvr);
 void read_face(char *str, struct obj_triangle **triangle, int *ntr);
 void init_vertexes(struct obj_vertex **vertex, int nvr);
+int is_object_valid(struct obj *object);
 
 void read_object(char *filename, struct obj *object)
 {
@@ -47,6 +48,22 @@ void read_object(char *filename, struct obj *object)
     object->number_of_triangles = ntr;
     object->number_of_vertices = nvr;
     fclose(fpin);
+
+    if (!is_object_valid(object))
+    {
+        printf("Invalid object");
+        if (object->vertices != NULL)
+        {
+            free(object->vertices);
+        }
+
+        if (object->triangles != NULL)
+        {
+            free(object->triangles);
+        }
+
+        exit(1);
+    }
 }
 
 void read_vertex(char *str, struct obj_vertex **fvertex, int *nvr)
@@ -158,7 +175,7 @@ void read_face(char *str, struct obj_triangle **triangle, int *ntr)
         }
     }
 
-    int i0 = 0, i1 = 1, i2 = 2, A, B, C, first = 1;
+    int i0 = 0, i1 = 1, i2 = 2, A, B, C, part_of_polygon = -1;
     while (i2 != k + 1)
     {
         A = poly[i0], B = poly[i1], C = poly[i2];
@@ -170,21 +187,48 @@ void read_face(char *str, struct obj_triangle **triangle, int *ntr)
         (*triangle + *ntr)->vertex_a = A;
         (*triangle + *ntr)->vertex_b = B;
         (*triangle + *ntr)->vertex_c = C;
-        (*triangle + *ntr)->first = first;
+        (*triangle + *ntr)->part_of_polygon = part_of_polygon;
+        if (part_of_polygon == -1)
+        {
+            part_of_polygon = *ntr;
+        }
+
         *ntr += 1;
         ++i1;
         ++i2;
-        first = 0;
     }
 }
 
 void init_vertexes(struct obj_vertex **vertex, int nvr)
 {
-    int i;
     *vertex = (struct obj_vertex *)malloc((nvr + 1) * sizeof(struct obj_vertex));
-    for (i = 1; i <= nvr; ++i)
+}
+
+int is_object_valid(struct obj *object)
+{
+    if (object->number_of_vertices == 0 || object->number_of_triangles == 0)
     {
-        (*vertex + i)->connect = (int *)malloc(100 * sizeof(int));
-        *((*vertex + i)->connect) = 0;
+        return 0;
     }
+
+    for (int i = 0; i < object->number_of_triangles; ++i)
+    {
+        struct obj_triangle triangle = object->triangles[i];
+        if (triangle.vertex_a > object->number_of_vertices || triangle.vertex_b > object->number_of_vertices || triangle.vertex_c > object->number_of_vertices)
+        {
+            printf("Invalid triangle vertices\n");
+            return 0;
+        }
+    }
+
+    for (int i = 0; i < object->number_of_vertices; i++)
+    {
+        if ((object->vertices + i) == NULL)
+        {
+            printf("Invalid vertex\n");
+            return 0;
+        }
+    }
+
+    return 1;
 }

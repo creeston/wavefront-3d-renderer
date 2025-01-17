@@ -45,7 +45,9 @@ static int currently_drawing = 0;
 
 struct color Red = {255, 0, 0};
 struct color Black = {100, 100, 100};
+struct color White = {255, 255, 255};
 int Background = 0xffffffff;
+int BLACK_BACKGROUND = 0x00000000;
 
 void init_gui(struct arguments arguments, int argc, char **argv)
 {
@@ -73,6 +75,7 @@ void init_gui(struct arguments arguments, int argc, char **argv)
     {
         read_object(arguments.file, object);
         gtk_revealer_set_reveal_child(global_revealer, TRUE);
+        set_object_to_render(object);
     }
 
     (void)g_timeout_add(fps_interval, (GSourceFunc)timer_exe, window);
@@ -93,6 +96,7 @@ gboolean configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, gpointe
     initialize_canvas_buffer(canvas_width, canvas_height);
     set_rotation_angles(theta_value, phi_value, rho_value);
     initialize_renderer(canvas_width, canvas_height);
+    set_color(White);
     return TRUE;
 }
 
@@ -116,9 +120,9 @@ gboolean upload_button_clicked_cb(GtkWidget *widget, gpointer user_data)
         GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
         filename = gtk_file_chooser_get_filename(chooser);
         read_object(filename, object);
-        rho_value = 3000.0;
         g_free(filename);
         gtk_revealer_set_reveal_child(global_revealer, TRUE);
+        set_object_to_render(object);
     }
     gtk_widget_destroy(dialog);
     return TRUE;
@@ -184,11 +188,11 @@ void on_window_destroy()
 
 void draw_object_on_canvas(GtkWidget *widget)
 {
-    fill_buffer(Background);
+    fill_buffer(BLACK_BACKGROUND);
 
     if (is_object_loaded())
     {
-        render(object, Black);
+        render();
     }
 
     cairo_t *cr = cairo_create(surface);

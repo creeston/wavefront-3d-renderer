@@ -1,14 +1,12 @@
 struct obj_vertex
 {
     double x, y, z;
-    int *connect;
-    double a, b, c;
 };
 
 struct obj_triangle
 {
     int vertex_a, vertex_b, vertex_c;
-    int first;
+    int part_of_polygon;
 };
 
 struct obj
