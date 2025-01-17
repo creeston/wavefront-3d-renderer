@@ -1,11 +1,11 @@
-struct vertice
+struct obj_vertex
 {
     double x, y, z;
     int *connect;
     double a, b, c;
 };
 
-struct triangle
+struct obj_triangle
 {
     int vertex_a, vertex_b, vertex_c;
     double a, b, c, h;
@@ -14,12 +14,10 @@ struct triangle
 
 struct obj
 {
-    struct vertice *fvertex;
-    struct vertice *vertex;
-    int nvr;
-    struct triangle *triangle;
-    int ntr;
-    int n;
+    struct obj_vertex *vertices;
+    struct obj_triangle *triangles;
+    int number_of_triangles;
+    int number_of_vertices;
 };
 
 #define BIG 1e30

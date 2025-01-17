@@ -24,6 +24,8 @@ double x_viewpoint_range, y_viewpoint_range;
 int *zbuffer;
 struct obj *previsouly_rendered_object;
 
+double theta, phi, rho = 3000;
+
 #define M_PI 3.14159265358979323846
 #define BIG_INT 2147483647
 #define EPS 1.e-5
@@ -36,20 +38,20 @@ struct obj *previsouly_rendered_object;
 #define SQR(x) ((x) * (x))
 
 void rasterize_triangle(struct vertice_2d A, struct vertice_2d B, struct vertice_2d C, struct color color);
-void render_triangles(struct triangle *triangle, int ntr, struct vertice *vertex, int number_of_vertices, struct color color);
-void render_triangle(struct triangle triangle, struct vertice *vertices, int number_of_vertices, struct color color);
+void render_triangles(struct obj_triangle *triangles, int number_of_triangles, struct vector_3d *vertices, int number_of_vertices, struct color color);
+void render_triangle(struct obj_triangle triangle, struct vector_3d *vertices, int number_of_vertices, struct color color);
 void initialize_z_buffer();
-void calculate_vertexes(struct vertice *fvertex, struct vertice **vertex, int nvr, double *Range);
-void calculate_scale(double Xmin, double Xmax, double Ymin, double Ymax);
-void calculate_triangles(struct vertice *vertex, struct triangle **triangle, int ntr, int nvr);
-int project_x_coordinate(struct vertice vertex);
-int project_y_coordinate(struct vertice vertex);
-struct vertice_2d project_vertex(struct vertice vertex);
+struct vector_3d *calculate_rotated_vertices(struct obj_vertex *object_vertices, int number_of_vertices);
+void calculate_scale(struct vector_3d *vertices, int number_of_vertices);
+void calculate_triangles(struct vector_3d *vertex, struct obj_triangle *triangle, int ntr, int nvr);
+int project_x_coordinate(struct vector_3d vertex);
+int project_y_coordinate(struct vector_3d vertex);
+struct vertice_2d project_vertex(struct vector_3d vertex);
 void normalize_vector(struct vector_3d *vec);
-void viewing(double x, double xO, double y, double yO, double z, double zO, double *pxe, double *pye, double *pze);
-void calculate_rotation_matrix(double rho, double theta, double phi);
+struct vector_3d apply_rotation_matrix(struct obj_vertex vertice, struct obj_vertex original_vertice);
 void reset_z_buffer();
 void swap_vertices(struct vertice_2d *A, struct vertice_2d *B);
+void calculate_rotation_matrix();
 
 void initialize_renderer()
 {
@@ -58,30 +60,37 @@ void initialize_renderer()
     initialize_z_buffer();
 }
 
-void render_obj(struct obj *object, struct color color, double theta, double phi, double rho)
+void set_rotation_angles(double theta_value, double phi_value, double rho_value)
 {
-    reset_z_buffer();
+    theta = theta_value;
+    phi = phi_value;
+    rho = rho_value;
 
-    struct vertice **fvertices = &(object->fvertex);
-    struct vertice **vertices = &(object->vertex);
-    struct triangle **triangles = &object->triangle;
-    int number_of_vertices = object->nvr;
-    int number_of_triangles = object->ntr;
-    double range[4] = {BIG, -BIG, BIG, -BIG};
-    calculate_rotation_matrix(rho, theta, phi);
-    calculate_vertexes(*fvertices, vertices, number_of_vertices, range);
+    calculate_rotation_matrix();
+}
+
+void render(struct obj *object, struct color color)
+{
+    struct obj_vertex *object_vertices = object->vertices;
+    struct obj_triangle *object_triangles = object->triangles;
+    int number_of_vertices = object->number_of_vertices;
+    int number_of_triangles = object->number_of_triangles;
+
+    struct vector_3d *vertices = calculate_rotated_vertices(object_vertices, number_of_vertices);
 
     if (previsouly_rendered_object != object)
     {
         previsouly_rendered_object = object;
-        calculate_scale(range[0], range[1], range[2], range[3]);
+        calculate_scale(vertices, number_of_vertices);
     }
 
-    calculate_triangles(*vertices, triangles, number_of_triangles, number_of_vertices);
-    render_triangles(*triangles, number_of_triangles, *vertices, number_of_vertices, color);
+    calculate_triangles(vertices, object_triangles, number_of_triangles, number_of_vertices);
+    reset_z_buffer();
+    render_triangles(object_triangles, number_of_triangles, vertices, number_of_vertices, color);
+    free(vertices);
 }
 
-void render_triangles(struct triangle *triangles, int number_of_triangles, struct vertice *vertices, int number_of_vertices, struct color color)
+void render_triangles(struct obj_triangle *triangles, int number_of_triangles, struct vector_3d *vertices, int number_of_vertices, struct color color)
 {
     normalize_vector(&light_direction);
     for (int i = 0; i < number_of_triangles; ++i)
@@ -90,7 +99,7 @@ void render_triangles(struct triangle *triangles, int number_of_triangles, struc
     }
 }
 
-void render_triangle(struct triangle triangle, struct vertice *vertices, int number_of_vertices, struct color color)
+void render_triangle(struct obj_triangle triangle, struct vector_3d *vertices, int number_of_vertices, struct color color)
 {
     double a = triangle.a;
     double b = triangle.b;
@@ -141,96 +150,99 @@ void initialize_z_buffer()
     }
 }
 
-void calculate_vertexes(struct vertice *fvertex, struct vertice **vertex, int nvr, double *Range)
+struct vector_3d *calculate_rotated_vertices(struct obj_vertex *fvertices, int number_of_vertices)
 {
-    int i;
-    double x, y, z, xe, ye, ze, X, Y;
-    double xO = fvertex[0].x, yO = fvertex[0].y, zO = fvertex[0].z;
-    for (i = 1; i <= nvr; ++i)
+    struct vector_3d *vertices = (struct vector_3d *)malloc((number_of_vertices + 1) * sizeof(struct vector_3d));
+    double xO = fvertices[0].x, yO = fvertices[0].y, zO = fvertices[0].z;
+    for (int i = 1; i <= number_of_vertices; ++i)
     {
-        x = (fvertex + i)->x;
-        y = (fvertex + i)->y;
-        z = (fvertex + i)->z;
-
-        viewing(x, xO, y, yO, z, zO, &xe, &ye, &ze);
-        if (ze <= EPS)
+        struct vector_3d rotated_vertex = apply_rotation_matrix(fvertices[i], fvertices[0]);
+        if (rotated_vertex.z <= EPS)
         {
             continue;
         }
 
-        X = xe / ze;
-        Y = ye / ze;
+        vertices[i].x = rotated_vertex.x;
+        vertices[i].y = rotated_vertex.y;
+        vertices[i].z = rotated_vertex.z;
+    }
+    return vertices;
+}
 
-        if (X < Range[0])
-            Range[0] = X;
-        if (X > Range[1])
-            Range[1] = X;
-        if (Y < Range[2])
-            Range[2] = Y;
-        if (Y > Range[3])
-            Range[3] = Y;
+void calculate_scale(struct vector_3d *vertices, int number_of_vertices)
+{
+    double x_min = BIG_INT, x_max = -BIG_INT, y_min = BIG_INT, y_max = -BIG_INT;
 
-        (*vertex + i)->x = xe;
-        (*vertex + i)->y = ye;
-        (*vertex + i)->z = ze;
-        if ((*vertex + i) == NULL)
+    for (int i = 1; i <= number_of_vertices; i++)
+    {
+        struct vector_3d rotated_vertex = vertices[i];
+        double x = rotated_vertex.x / rotated_vertex.z;
+        double y = rotated_vertex.y / rotated_vertex.z;
+
+        if (x < x_min)
         {
-            printf("some kind of error\n");
+            x_min = x;
+        }
+        if (x > x_max)
+        {
+            x_max = x;
+        }
+        if (y < y_min)
+        {
+            y_min = y;
+        }
+        if (y > y_max)
+        {
+            y_max = y;
         }
     }
-}
 
-void calculate_scale(double Xmin, double Xmax, double Ymin, double Ymax)
-{
-    double fx, fy, Xcentre, Ycentre;
-    double Xrange, Yrange;
+    double x_range = x_max - x_min;
+    double y_range = y_max - y_min;
 
-    Xrange = Xmax - Xmin;
-    Yrange = Ymax - Ymin;
-
-    fx = x_viewpoint_range / Xrange;
-    fy = y_viewpoint_range / Yrange;
+    double fx = x_viewpoint_range / x_range;
+    double fy = y_viewpoint_range / y_range;
     d = (fx < fy) ? fx : fy;
     initial_d = d;
-    Xcentre = (Xmin + Xmax) / 2;
-    Ycentre = (Ymax + Ymin) / 2;
+    double x_center = (x_min + x_max) / 2;
+    double y_center = (y_max + y_min) / 2;
     double x_viewpoint_center = (x_viewpoint_min + x_viewpoint_max) / 2;
     double y_viewpoint_center = (y_viewpoint_min + y_viewpoint_max) / 2;
-    c1 = x_viewpoint_center - d * Xcentre;
-    c2 = y_viewpoint_center - d * Ycentre;
+    c1 = x_viewpoint_center - d * x_center;
+    c2 = y_viewpoint_center - d * y_center;
 }
 
-void calculate_triangles(struct vertice *vertex, struct triangle **triangle, int ntr, int nvr)
+void calculate_triangles(struct vector_3d *vertices, struct obj_triangle *triangles, int ntr, int nvr)
 {
     double xA, yA, zA, xB, yB, zB, xC, yC, zC, a, b, c, h, r;
     int i, j, A, B, C;
     for (i = 0; i < ntr; ++i)
     {
-        A = (*triangle + i)->vertex_a;
-        B = (*triangle + i)->vertex_b;
-        C = (*triangle + i)->vertex_c;
+        A = triangles[i].vertex_a;
+        B = triangles[i].vertex_b;
+        C = triangles[i].vertex_c;
 
         if (A > nvr || A < 0 || B > nvr || B < 0 || C > nvr || C < 0)
         {
             continue;
         }
 
-        if ((vertex + A) == NULL || (vertex + B) == NULL || (vertex + C) == NULL)
+        if ((vertices + A) == NULL || (vertices + B) == NULL || (vertices + C) == NULL)
         {
             continue;
         }
 
-        if ((*triangle + i)->first == 1)
+        if (triangles[i].first == 1)
         {
-            xA = (vertex + A)->x;
-            yA = (vertex + A)->y;
-            zA = (vertex + A)->z;
-            xB = (vertex + B)->x;
-            yB = (vertex + B)->y;
-            zB = (vertex + B)->z;
-            xC = (vertex + C)->x;
-            yC = (vertex + C)->y;
-            zC = (vertex + C)->z;
+            xA = (vertices + A)->x;
+            yA = (vertices + A)->y;
+            zA = (vertices + A)->z;
+            xB = (vertices + B)->x;
+            yB = (vertices + B)->y;
+            zB = (vertices + B)->z;
+            xC = (vertices + C)->x;
+            yC = (vertices + C)->y;
+            zC = (vertices + C)->z;
 
             a = yA * (zB - zC) - yB * (zA - zC) + yC * (zA - zB);
             b = -(xA * (zB - zC) - xB * (zA - zC) + xC * (zA - zB));
@@ -243,20 +255,22 @@ void calculate_triangles(struct vertice *vertex, struct triangle **triangle, int
             c /= r;
             h /= r;
 
-            (*triangle + i)->a = a;
-            (*triangle + i)->b = b;
-            (*triangle + i)->c = c;
-            (*triangle + i)->h = h;
+            triangles[i].a = a;
+            triangles[i].b = b;
+            triangles[i].c = c;
+            triangles[i].h = h;
         }
         else
         {
             j = i;
-            while ((*triangle + j)->first != 1)
+            while (triangles[j].first != 1)
+            {
                 --j;
-            (*triangle + i)->a = (*triangle + j)->a;
-            (*triangle + i)->b = (*triangle + j)->b;
-            (*triangle + i)->c = (*triangle + j)->c;
-            (*triangle + i)->h = (*triangle + j)->h;
+            }
+            triangles[i].a = triangles[j].a;
+            triangles[i].b = triangles[j].b;
+            triangles[i].c = triangles[j].c;
+            triangles[i].h = triangles[j].h;
         }
     }
 }
@@ -329,7 +343,7 @@ void rasterize_triangle(struct vertice_2d v1, struct vertice_2d v2, struct verti
     }
 }
 
-struct vertice_2d project_vertex(struct vertice vertex)
+struct vertice_2d project_vertex(struct vector_3d vertex)
 {
     struct vertice_2d v;
     v.x = project_x_coordinate(vertex);
@@ -338,12 +352,12 @@ struct vertice_2d project_vertex(struct vertice vertex)
     return v;
 }
 
-int project_x_coordinate(struct vertice vertex)
+int project_x_coordinate(struct vector_3d vertex)
 {
     return (int)(vertex.x * d / vertex.z + c1);
 }
 
-int project_y_coordinate(struct vertice vertex)
+int project_y_coordinate(struct vector_3d vertex)
 {
     return (int)(vertex.y * d / vertex.z + c2);
 }
@@ -357,14 +371,22 @@ void normalize_vector(struct vector_3d *vec)
     vec->z /= r;
 }
 
-void viewing(double x, double xO, double y, double yO, double z, double zO, double *pxe, double *pye, double *pze)
+struct vector_3d apply_rotation_matrix(struct obj_vertex vertice, struct obj_vertex original_vertice)
 {
-    *pxe = (v11 * (x - xO) + v21 * (y - yO)) + xO;
-    *pye = (v12 * (x - xO) + v22 * (y - yO) + v32 * (z - zO)) + yO;
-    *pze = (v13 * (x - xO) + v23 * (y - yO) + v33 * (z - zO) + v43) + zO;
+    double xO = original_vertice.x, yO = original_vertice.y, zO = original_vertice.z;
+    double x = vertice.x;
+    double y = vertice.y;
+    double z = vertice.z;
+
+    double pxe = (v11 * (vertice.x - original_vertice.x) + v21 * (y - yO)) + xO;
+    double pye = (v12 * (x - xO) + v22 * (y - yO) + v32 * (z - zO)) + yO;
+    double pze = (v13 * (x - xO) + v23 * (y - yO) + v33 * (z - zO) + v43) + zO;
+
+    struct vector_3d rotated_vertice = {pxe, pye, pze};
+    return rotated_vertice;
 }
 
-void calculate_rotation_matrix(double rho, double theta, double phi)
+void calculate_rotation_matrix()
 {
     double th, ph, costh, sinth, cosph, sinph, factor;
 
@@ -397,28 +419,28 @@ void reset_z_buffer()
 
 void move_obj_relative(struct obj *object, int dx, int dy, int dz)
 {
-    for (int i = 1; i <= object->nvr; ++i)
+    for (int i = 1; i <= object->number_of_vertices; ++i)
     {
-        object->fvertex[i].x += dx;
-        object->fvertex[i].y += dy;
-        object->fvertex[i].z += dz;
+        object->vertices[i].x += dx;
+        object->vertices[i].y += dy;
+        object->vertices[i].z += dz;
     }
 }
 
 void move_obj_absolute(struct obj *object, int x, int y, int z)
 {
-    int dx = x - object->fvertex[0].x;
-    int dy = y - object->fvertex[0].y;
-    int dz = z - object->fvertex[0].z;
-    for (int i = 1; i <= object->nvr; ++i)
+    int dx = x - object->vertices[0].x;
+    int dy = y - object->vertices[0].y;
+    int dz = z - object->vertices[0].z;
+    for (int i = 1; i <= object->number_of_vertices; ++i)
     {
-        object->fvertex[i].x += dx;
-        object->fvertex[i].y += dy;
-        object->fvertex[i].z += dz;
+        object->vertices[i].x += dx;
+        object->vertices[i].y += dy;
+        object->vertices[i].z += dz;
     }
 }
 
-void change_scale(float scale)
+void set_scale(float scale)
 {
     d = initial_d * scale;
 }

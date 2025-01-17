@@ -3,20 +3,20 @@
 #include <stdlib.h>
 #include <string.h>
 
-void read_vertex(char *str, struct vertice **fvertex, int *nvr);
-void read_face(char *str, struct triangle **triangle, int *ntr);
-void init_vertexes(struct vertice **vertex, int nvr);
+void read_vertex(char *str, struct obj_vertex **fvertex, int *nvr);
+void read_face(char *str, struct obj_triangle **triangle, int *ntr);
+void init_vertexes(struct obj_vertex **vertex, int nvr);
 
 void read_object(char *filename, struct obj *object)
 {
     FILE *fpin;
     char string[100];
 
-    struct vertice *fvertex;
-    struct vertice *vertex;
+    struct obj_vertex *fvertex;
+    struct obj_vertex *vertex;
     int nvr = 1;
 
-    struct triangle *triangle;
+    struct obj_triangle *triangle;
     int ntr = 0;
 
     fpin = fopen(filename, "r");
@@ -42,15 +42,14 @@ void read_object(char *filename, struct obj *object)
         }
     }
     init_vertexes(&vertex, nvr);
-    object->fvertex = fvertex;
-    object->vertex = vertex;
-    object->ntr = ntr;
-    object->nvr = nvr;
-    object->triangle = triangle;
+    object->vertices = fvertex;
+    object->triangles = triangle;
+    object->number_of_triangles = ntr;
+    object->number_of_vertices = nvr;
     fclose(fpin);
 }
 
-void read_vertex(char *str, struct vertice **fvertex, int *nvr)
+void read_vertex(char *str, struct obj_vertex **fvertex, int *nvr)
 {
     static double xmin = BIG, ymin = BIG, zmin = BIG, xmax = -BIG, ymax = -BIG, zmax = -BIG;
     char numx[15], numy[15], numz[15];
@@ -99,13 +98,13 @@ void read_vertex(char *str, struct vertice **fvertex, int *nvr)
 
     if (*nvr == 1)
     {
-        *fvertex = (struct vertice *)malloc(2 * sizeof(struct vertice));
+        *fvertex = (struct obj_vertex *)malloc(2 * sizeof(struct obj_vertex));
         (*fvertex)[0].x = 0;
         (*fvertex)[0].y = 0;
         (*fvertex)[0].z = 0;
     }
     else
-        *fvertex = (struct vertice *)realloc(*fvertex, (*nvr + 1) * sizeof(struct vertice));
+        *fvertex = (struct obj_vertex *)realloc(*fvertex, (*nvr + 1) * sizeof(struct obj_vertex));
 
     (*fvertex)->x = (xmin + xmax) / 2;
     (*fvertex)->y = (ymin + ymax) / 2;
@@ -116,7 +115,7 @@ void read_vertex(char *str, struct vertice **fvertex, int *nvr)
     *nvr += 1;
 }
 
-void read_face(char *str, struct triangle **triangle, int *ntr)
+void read_face(char *str, struct obj_triangle **triangle, int *ntr)
 {
     char num[10], part[150][30];
     int j = 0, i = 2, k = 0, poly[30];
@@ -164,9 +163,9 @@ void read_face(char *str, struct triangle **triangle, int *ntr)
     {
         A = poly[i0], B = poly[i1], C = poly[i2];
         if (*ntr == 0)
-            *triangle = malloc(sizeof(struct triangle));
+            *triangle = malloc(sizeof(struct obj_triangle));
         else
-            *triangle = (struct triangle *)realloc(*triangle, (*ntr + 1) * sizeof(struct triangle));
+            *triangle = (struct obj_triangle *)realloc(*triangle, (*ntr + 1) * sizeof(struct obj_triangle));
 
         (*triangle + *ntr)->vertex_a = A;
         (*triangle + *ntr)->vertex_b = B;
@@ -179,10 +178,10 @@ void read_face(char *str, struct triangle **triangle, int *ntr)
     }
 }
 
-void init_vertexes(struct vertice **vertex, int nvr)
+void init_vertexes(struct obj_vertex **vertex, int nvr)
 {
     int i;
-    *vertex = (struct vertice *)malloc((nvr + 1) * sizeof(struct vertice));
+    *vertex = (struct obj_vertex *)malloc((nvr + 1) * sizeof(struct obj_vertex));
     for (i = 1; i <= nvr; ++i)
     {
         (*vertex + i)->connect = (int *)malloc(100 * sizeof(int));

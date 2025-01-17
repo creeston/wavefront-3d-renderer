@@ -31,7 +31,7 @@ GtkWidget *global_canvas;
 struct obj *object;
 cairo_surface_t *surface;
 int canvas_height, canvas_width;
-double phi = 0, theta = 0, rho = 3000;
+double phi_value = 0, theta_value = 0, rho_value = 3000;
 double x, y, z = 0;
 double current_x_alpha = 0;
 double current_y_beta = 0;
@@ -72,7 +72,6 @@ void init_gui(struct arguments arguments, int argc, char **argv)
     if (arguments.file)
     {
         read_object(arguments.file, object);
-        rho = 3000.0;
         gtk_revealer_set_reveal_child(global_revealer, TRUE);
     }
 
@@ -92,6 +91,7 @@ gboolean configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, gpointe
     surface = gdk_window_create_similar_surface(gtk_widget_get_window(widget), CAIRO_CONTENT_COLOR, canvas_width, canvas_height);
     clear_surface();
     initialize_canvas_buffer(canvas_width, canvas_height);
+    set_rotation_angles(theta_value, phi_value, rho_value);
     initialize_renderer(canvas_width, canvas_height);
     return TRUE;
 }
@@ -116,7 +116,7 @@ gboolean upload_button_clicked_cb(GtkWidget *widget, gpointer user_data)
         GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
         filename = gtk_file_chooser_get_filename(chooser);
         read_object(filename, object);
-        rho = 3000.0;
+        rho_value = 3000.0;
         g_free(filename);
         gtk_revealer_set_reveal_child(global_revealer, TRUE);
     }
@@ -128,7 +128,7 @@ gboolean on_zoom_slider_value_changed(GtkRange *range, gpointer user_data)
 {
     int zoom_value = (int)gtk_range_get_value(range);
     double zoom = (double)(zoom_value) / 100 - 0.5;
-    change_scale(1 + (zoom * 2));
+    set_scale(1 + (zoom * 2));
     return TRUE;
 }
 
@@ -136,8 +136,9 @@ gboolean on_rotate_phi_slider_value_changed(GtkRange *range, gpointer user_data)
 {
     int rotate_beta = (int)gtk_range_get_value(range);
     int beta = rotate_beta - current_y_beta;
-    rotate_around_y(beta, &rho, &theta, &phi);
+    rotate_around_y(beta, &rho_value, &theta_value, &phi_value);
     current_y_beta = rotate_beta;
+    set_rotation_angles(theta_value, phi_value, rho_value);
     return TRUE;
 }
 
@@ -145,8 +146,9 @@ gboolean on_rotate_theta_slider_value_changed(GtkRange *range, gpointer user_dat
 {
     int rotate_gamma = (int)gtk_range_get_value(range);
     int gamma = rotate_gamma - current_z_gamma;
-    rotate_around_z(gamma, &rho, &theta, &phi);
+    rotate_around_z(gamma, &rho_value, &theta_value, &phi_value);
     current_z_gamma = rotate_gamma;
+    set_rotation_angles(theta_value, phi_value, rho_value);
     return TRUE;
 }
 
@@ -154,8 +156,9 @@ gboolean on_rotate_x_slider_value_changed(GtkRange *range, gpointer user_data)
 {
     int rotate_alpha = (int)gtk_range_get_value(range);
     int alpha = rotate_alpha - current_x_alpha;
-    rotate_around_x(alpha, &rho, &theta, &phi);
+    rotate_around_x(alpha, &rho_value, &theta_value, &phi_value);
     current_x_alpha = rotate_alpha;
+    set_rotation_angles(theta_value, phi_value, rho_value);
     return TRUE;
 }
 
@@ -182,7 +185,11 @@ void on_window_destroy()
 void draw_object_on_canvas(GtkWidget *widget)
 {
     fill_buffer(Background);
-    render_obj(object, Black, theta, phi, rho);
+
+    if (is_object_loaded())
+    {
+        render(object, Black);
+    }
 
     cairo_t *cr = cairo_create(surface);
     set_pixbuf_for_surface(cr);
@@ -203,22 +210,22 @@ void clear_surface(void)
 
 float sperical_to_cartesian_x()
 {
-    return rho * sin(DEG_TO_RAD(theta)) * cos(DEG_TO_RAD(phi));
+    return rho_value * sin(DEG_TO_RAD(theta_value)) * cos(DEG_TO_RAD(phi_value));
 }
 
 float sperical_to_cartesian_y()
 {
-    return rho * sin(DEG_TO_RAD(theta)) * sin(DEG_TO_RAD(phi));
+    return rho_value * sin(DEG_TO_RAD(theta_value)) * sin(DEG_TO_RAD(phi_value));
 }
 
 float sperical_to_cartesian_z()
 {
-    return rho * cos(DEG_TO_RAD(theta));
+    return rho_value * cos(DEG_TO_RAD(theta_value));
 }
 
 float cartesian_to_sperical_theta(int z)
 {
-    return RAD_TO_DEG(acos(z / rho));
+    return RAD_TO_DEG(acos(z / rho_value));
 }
 
 float cartesian_to_sperical_phi(int x, int y)
@@ -270,7 +277,7 @@ void rotate_around_z(int alpha, double *rho, double *theta, double *phi)
 
 gboolean is_object_loaded()
 {
-    return object->ntr > 0;
+    return object->number_of_triangles > 0;
 }
 
 gboolean timer_exe(GtkWidget *window)
