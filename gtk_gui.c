@@ -4,49 +4,55 @@
 #include "gtk_gui.h"
 #include "renderer.h"
 
-#ifndef M_PI
 #define M_PI 3.14159265358979323846
-#endif
 
+#define SQR(x) ((x) * (x))
 #define DEG_TO_RAD(deg) ((deg) * M_PI / 180.0)
 #define RAD_TO_DEG(rad) ((rad) * 180.0 / M_PI)
 
+gboolean motion_notify_event_cb(GtkWidget *widget, GdkEventMotion *event, gpointer data);
+gboolean button_press_event_cb(GtkWidget *widget, GdkEventButton *event, gpointer data);
+gboolean button_release_event_cb(GtkWidget *widget, GdkEventButton *event, gpointer user_data);
 gboolean configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, gpointer data);
 gboolean draw_cb(GtkWidget *widget, cairo_t *cr, gpointer data);
 gboolean on_zoom_slider_value_changed(GtkRange *range, gpointer user_data);
-gboolean on_rotate_phi_slider_value_changed(GtkRange *range, gpointer user_data);
-gboolean on_rotate_theta_slider_value_changed(GtkRange *range, gpointer user_data);
+gboolean on_rotate_y_slider_value_changed(GtkRange *range, gpointer user_data);
+gboolean on_rotate_z_slider_value_changed(GtkRange *range, gpointer user_data);
 gboolean on_rotate_x_slider_value_changed(GtkRange *range, gpointer user_data);
+gboolean on_change_rho_slider_value_changed(GtkRange *range, gpointer user_data);
+void update_rotation_angles();
+
 void on_toggle_button_clicked(GtkButton *button, gpointer user_data);
 gboolean upload_button_clicked_cb(GtkWidget *widget, gpointer data);
 
 void on_window_destroy();
-void clear_surface();
 void draw_object_on_canvas(GtkWidget *widget);
 gboolean is_object_loaded();
 gboolean timer_exe(GtkWidget *window);
 GtkRevealer *global_revealer;
 GtkWidget *global_canvas;
+GtkRange *global_rho_slider;
 
 struct obj *object;
 cairo_surface_t *surface;
+cairo_t *cr;
+
 int canvas_height, canvas_width;
-double phi_value = 0, theta_value = 0, rho_value = 3000;
 double x, y, z = 0;
 double current_x_alpha = 0;
 double current_y_beta = 0;
 double current_z_gamma = 0;
 
-void rotate_around_x(int alpha, double *rho, double *theta, double *phi);
-void rotate_around_y(int alpha, double *rho, double *theta, double *phi);
-void rotate_around_z(int alpha, double *rho, double *theta, double *phi);
+static gboolean is_mouse_pressed = FALSE;
+static int prev_y = 0, prev_x = 0;
 
 static int currently_drawing = 0;
 
 struct color Red = {255, 0, 0};
 struct color Black = {100, 100, 100};
 struct color White = {255, 255, 255};
-int Background = 0xffffffff;
+
+int WHITE_BACKGROUND = 0xffffffff;
 int BLACK_BACKGROUND = 0x00000000;
 
 void init_gui(struct arguments arguments, int argc, char **argv)
@@ -64,9 +70,11 @@ void init_gui(struct arguments arguments, int argc, char **argv)
 
     GObject *revealer = gtk_builder_get_object(builder, "control_revealer");
     GObject *canvas = gtk_builder_get_object(builder, "render_area");
+    GObject *rho_slider = gtk_builder_get_object(builder, "change_rho_slider");
 
     global_canvas = GTK_WIDGET(canvas);
     global_revealer = GTK_REVEALER(revealer);
+    global_rho_slider = GTK_RANGE(rho_slider);
 
     g_object_unref(builder);
     gtk_widget_show(window);
@@ -76,6 +84,8 @@ void init_gui(struct arguments arguments, int argc, char **argv)
         read_object(arguments.file, object);
         gtk_revealer_set_reveal_child(global_revealer, TRUE);
         set_object_to_render(object);
+        int translation_value = get_translation();
+        gtk_range_set_value(global_rho_slider, translation_value);
     }
 
     (void)g_timeout_add(fps_interval, (GSourceFunc)timer_exe, window);
@@ -92,9 +102,9 @@ gboolean configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, gpointe
     canvas_width = gtk_widget_get_allocated_width(widget);
     canvas_height = gtk_widget_get_allocated_height(widget);
     surface = gdk_window_create_similar_surface(gtk_widget_get_window(widget), CAIRO_CONTENT_COLOR, canvas_width, canvas_height);
-    clear_surface();
+    cr = cairo_create(surface);
+    gtk_widget_add_events(widget, GDK_BUTTON_PRESS_MASK | GDK_POINTER_MOTION_MASK | GDK_BUTTON_RELEASE_MASK);
     initialize_canvas_buffer(canvas_width, canvas_height);
-    set_rotation_angles(theta_value, phi_value, rho_value);
     initialize_renderer(canvas_width, canvas_height);
     set_color(White);
     return TRUE;
@@ -123,6 +133,8 @@ gboolean upload_button_clicked_cb(GtkWidget *widget, gpointer user_data)
         g_free(filename);
         gtk_revealer_set_reveal_child(global_revealer, TRUE);
         set_object_to_render(object);
+        int translation_value = get_translation();
+        gtk_range_set_value(global_rho_slider, translation_value);
     }
     gtk_widget_destroy(dialog);
     return TRUE;
@@ -136,34 +148,37 @@ gboolean on_zoom_slider_value_changed(GtkRange *range, gpointer user_data)
     return TRUE;
 }
 
-gboolean on_rotate_phi_slider_value_changed(GtkRange *range, gpointer user_data)
+gboolean on_rotate_y_slider_value_changed(GtkRange *range, gpointer user_data)
 {
-    int rotate_beta = (int)gtk_range_get_value(range);
-    int beta = rotate_beta - current_y_beta;
-    rotate_around_y(beta, &rho_value, &theta_value, &phi_value);
-    current_y_beta = rotate_beta;
-    set_rotation_angles(theta_value, phi_value, rho_value);
+    current_y_beta = (int)gtk_range_get_value(range);
+    update_rotation_angles();
     return TRUE;
 }
 
-gboolean on_rotate_theta_slider_value_changed(GtkRange *range, gpointer user_data)
+gboolean on_rotate_z_slider_value_changed(GtkRange *range, gpointer user_data)
 {
-    int rotate_gamma = (int)gtk_range_get_value(range);
-    int gamma = rotate_gamma - current_z_gamma;
-    rotate_around_z(gamma, &rho_value, &theta_value, &phi_value);
-    current_z_gamma = rotate_gamma;
-    set_rotation_angles(theta_value, phi_value, rho_value);
+    current_z_gamma = (int)gtk_range_get_value(range);
+    update_rotation_angles();
     return TRUE;
 }
 
 gboolean on_rotate_x_slider_value_changed(GtkRange *range, gpointer user_data)
 {
-    int rotate_alpha = (int)gtk_range_get_value(range);
-    int alpha = rotate_alpha - current_x_alpha;
-    rotate_around_x(alpha, &rho_value, &theta_value, &phi_value);
-    current_x_alpha = rotate_alpha;
-    set_rotation_angles(theta_value, phi_value, rho_value);
+    current_x_alpha = (int)gtk_range_get_value(range);
+    update_rotation_angles();
     return TRUE;
+}
+
+gboolean on_change_rho_slider_value_changed(GtkRange *range, gpointer user_data)
+{
+    int rho = (int)gtk_range_get_value(range);
+    set_translation(rho);
+    return TRUE;
+}
+
+void update_rotation_angles()
+{
+    set_cartesian_translation(DEG_TO_RAD(current_x_alpha), DEG_TO_RAD(current_y_beta), DEG_TO_RAD(current_z_gamma));
 }
 
 void on_toggle_button_clicked(GtkButton *button, gpointer user_data)
@@ -181,6 +196,7 @@ void on_window_destroy()
 {
     if (surface)
     {
+        cairo_destroy(cr);
         cairo_surface_destroy(surface);
     }
     gtk_main_quit();
@@ -195,88 +211,9 @@ void draw_object_on_canvas(GtkWidget *widget)
         render();
     }
 
-    cairo_t *cr = cairo_create(surface);
     set_pixbuf_for_surface(cr);
     cairo_paint(cr);
-    cairo_fill(cr);
-    cairo_destroy(cr);
     gtk_widget_queue_draw(widget);
-}
-
-void clear_surface(void)
-{
-    cairo_t *cr;
-    cr = cairo_create(surface);
-    cairo_set_source_rgb(cr, 1, 1, 1);
-    cairo_paint(cr);
-    cairo_destroy(cr);
-}
-
-float sperical_to_cartesian_x()
-{
-    return rho_value * sin(DEG_TO_RAD(theta_value)) * cos(DEG_TO_RAD(phi_value));
-}
-
-float sperical_to_cartesian_y()
-{
-    return rho_value * sin(DEG_TO_RAD(theta_value)) * sin(DEG_TO_RAD(phi_value));
-}
-
-float sperical_to_cartesian_z()
-{
-    return rho_value * cos(DEG_TO_RAD(theta_value));
-}
-
-float cartesian_to_sperical_theta(int z)
-{
-    return RAD_TO_DEG(acos(z / rho_value));
-}
-
-float cartesian_to_sperical_phi(int x, int y)
-{
-    return RAD_TO_DEG(atan2(y, x));
-}
-
-void rotate_around_x(int alpha, double *rho, double *theta, double *phi)
-{
-    double x = sperical_to_cartesian_x();
-    double y = sperical_to_cartesian_y();
-    double z = sperical_to_cartesian_z();
-
-    double newX = x;
-    double newY = y * cos(DEG_TO_RAD(alpha)) - z * sin(DEG_TO_RAD(alpha));
-    double newZ = y * sin(DEG_TO_RAD(alpha)) + z * cos(DEG_TO_RAD(alpha));
-
-    *theta = cartesian_to_sperical_theta(newZ);
-    *phi = cartesian_to_sperical_phi(newX, newY);
-}
-
-void rotate_around_y(int alpha, double *rho, double *theta, double *phi)
-{
-    double x = sperical_to_cartesian_x();
-    double y = sperical_to_cartesian_y();
-    double z = sperical_to_cartesian_z();
-
-    double newX = x * cos(DEG_TO_RAD(alpha)) + z * sin(DEG_TO_RAD(alpha));
-    double newY = y;
-    double newZ = -x * sin(DEG_TO_RAD(alpha)) + z * cos(DEG_TO_RAD(alpha));
-
-    *theta = cartesian_to_sperical_theta(newZ);
-    *phi = cartesian_to_sperical_phi(newX, newY);
-}
-
-void rotate_around_z(int alpha, double *rho, double *theta, double *phi)
-{
-    double x = sperical_to_cartesian_x();
-    double y = sperical_to_cartesian_y();
-    double z = sperical_to_cartesian_z();
-
-    double newX = x * cos(DEG_TO_RAD(alpha)) - y * sin(DEG_TO_RAD(alpha));
-    double newY = x * sin(DEG_TO_RAD(alpha)) + y * cos(DEG_TO_RAD(alpha));
-    double newZ = z;
-
-    *theta = cartesian_to_sperical_theta(newZ);
-    *phi = cartesian_to_sperical_phi(newX, newY);
 }
 
 gboolean is_object_loaded()
@@ -300,5 +237,43 @@ gboolean timer_exe(GtkWidget *window)
         g_atomic_int_set(&currently_drawing, 0);
     }
 
+    return TRUE;
+}
+
+gboolean motion_notify_event_cb(GtkWidget *widget, GdkEventMotion *event, gpointer data)
+{
+    if (event->state && is_mouse_pressed)
+    {
+        int x = event->x, y = event->y;
+        int dx = x - prev_x, dy = y - prev_y;
+        prev_x = x;
+        prev_y = y;
+
+        move_obj_relative(dx, dy);
+    }
+    return TRUE;
+}
+
+// Callback for button-press-event
+gboolean button_press_event_cb(GtkWidget *widget, GdkEventButton *event, gpointer user_data)
+{
+    if (event->button == GDK_BUTTON_PRIMARY)
+    { // Check if the left mouse button is pressed
+        is_mouse_pressed = TRUE;
+        prev_x = event->x;
+        prev_y = event->y;
+
+        get_pixel_info(prev_x, prev_y);
+    }
+    return TRUE; // Returning TRUE stops the event from propagating further
+}
+
+// Callback for button-release-event
+gboolean button_release_event_cb(GtkWidget *widget, GdkEventButton *event, gpointer user_data)
+{
+    if (event->button == GDK_BUTTON_PRIMARY)
+    {
+        is_mouse_pressed = FALSE;
+    }
     return TRUE;
 }

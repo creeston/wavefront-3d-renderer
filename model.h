@@ -15,8 +15,10 @@ struct obj
     struct obj_triangle *triangles;
     int number_of_triangles;
     int number_of_vertices;
+    double largest_dimension;
+    double x_min, x_max, y_min, y_max, z_min, z_max;
 };
 
 #define BIG 1e30
 
-void read_object(char *filename, struct obj *object);
+void read_object(const char *filename, struct obj *object);

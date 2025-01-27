@@ -2,56 +2,66 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
-void read_vertex(char *str, struct obj_vertex **fvertex, int *nvr);
-void read_face(char *str, struct obj_triangle **triangle, int *ntr);
-void init_vertexes(struct obj_vertex **vertex, int nvr);
-int is_object_valid(struct obj *object);
+void read_vertex(char *str, struct obj_vertex **vertices, int *vertex_count);
+void read_face(char *str, struct obj_triangle **triangles, int *triangles_count);
+int validate_object(struct obj *object);
 
-void read_object(char *filename, struct obj *object)
+#define LINE_BUFFER_SIZE 256
+#define MAX_NUM_LENGTH 32
+#define SQR(x) ((x) * (x))
+#define MAX_POLY_INDICES 30
+
+void read_object(const char *filename, struct obj *object)
 {
-    FILE *fpin;
-    char string[100];
-
-    struct obj_vertex *fvertex;
-    struct obj_vertex *vertex;
-    int nvr = 1;
-
-    struct obj_triangle *triangle;
-    int ntr = 0;
-
-    fpin = fopen(filename, "r");
-    while (!feof(fpin))
+    if (!filename || !object)
     {
-        fgets(string, sizeof(string), fpin);
-        switch (string[0])
+        fprintf(stderr, "Invalid arguments to read_object\n");
+        exit(EXIT_FAILURE);
+    }
+
+    FILE *file = fopen(filename, "r");
+    if (!file)
+    {
+        perror("Error opening file");
+        exit(EXIT_FAILURE);
+    }
+
+    struct obj_vertex *vertices = NULL;
+    struct obj_triangle *triangles = NULL;
+    int vertex_count = 1, triangle_count = 0;
+
+    char line[LINE_BUFFER_SIZE];
+
+    while (fgets(line, sizeof(line), file))
+    {
+        switch (line[0])
         {
         case 'v':
-            if (string[1] == ' ')
+            if (line[1] == ' ')
             {
-                string[strlen(string) - 1] = '\0';
-                read_vertex(string, &fvertex, &nvr);
+                read_vertex(line, &vertices, &vertex_count);
             }
             break;
         case 'f':
-            string[strlen(string) - 1] = '\0';
-            read_face(string, &triangle, &ntr);
+            read_face(line, &triangles, &triangle_count);
             break;
         default:
             continue;
             break;
         }
     }
-    init_vertexes(&vertex, nvr);
-    object->vertices = fvertex;
-    object->triangles = triangle;
-    object->number_of_triangles = ntr;
-    object->number_of_vertices = nvr;
-    fclose(fpin);
+    fclose(file);
 
-    if (!is_object_valid(object))
+    object->vertices = vertices;
+    object->triangles = triangles;
+    object->number_of_triangles = triangle_count;
+    object->number_of_vertices = vertex_count;
+
+    if (!validate_object(object))
     {
-        printf("Invalid object");
+        fprintf(stderr, "Invalid object data\n");
         if (object->vertices != NULL)
         {
             free(object->vertices);
@@ -62,149 +72,174 @@ void read_object(char *filename, struct obj *object)
             free(object->triangles);
         }
 
-        exit(1);
+        exit(EXIT_FAILURE);
     }
+
+    double xmin = BIG, ymin = BIG, zmin = BIG, xmax = -BIG, ymax = -BIG, zmax = -BIG;
+
+    for (int i = 1; i < object->number_of_vertices; i++)
+    {
+        double x = object->vertices[i].x;
+        double y = object->vertices[i].y;
+        double z = object->vertices[i].z;
+
+        if (x > xmax)
+        {
+            xmax = x;
+        }
+        if (x < xmin)
+        {
+            xmin = x;
+        }
+        if (y > ymax)
+        {
+            ymax = y;
+        }
+        if (y < ymin)
+        {
+            ymin = y;
+        }
+        if (z > zmax)
+        {
+            zmax = z;
+        }
+        if (z < zmin)
+        {
+            zmin = z;
+        }
+    }
+
+    double x_origin = (xmin + xmax) / 2;
+    double y_origin = (ymin + ymax) / 2;
+    double z_origin = (zmin + zmax) / 2;
+
+    for (int i = 1; i < object->number_of_vertices; i++)
+    {
+        object->vertices[i].x -= x_origin;
+        object->vertices[i].y -= y_origin;
+        object->vertices[i].z -= z_origin;
+    }
+
+    object->vertices[0].x = 0;
+    object->vertices[0].y = 0;
+    object->vertices[0].z = 0;
+
+    object->largest_dimension = sqrt(SQR(xmax - xmin) + SQR(ymax - ymin) + SQR(zmax - zmin));
+    object->x_min = xmin;
+    object->x_max = xmax;
+    object->y_min = ymin;
+    object->y_max = ymax;
+    object->z_min = zmin;
+    object->z_max = zmax;
 }
 
-void read_vertex(char *str, struct obj_vertex **fvertex, int *nvr)
+void read_vertex(char *line, struct obj_vertex **vertices, int *vertex_count)
 {
-    static double xmin = BIG, ymin = BIG, zmin = BIG, xmax = -BIG, ymax = -BIG, zmax = -BIG;
-    char numx[15], numy[15], numz[15];
-    int i = 1;
-    while (str[i] == ' ')
-        ++i;
-    int j = 0;
-    while (str[i] != ' ')
+    if (!line || !vertices || !vertex_count)
     {
-        numx[j] = str[i];
-        ++i;
-        ++j;
+        fprintf(stderr, "Invalid arguments to read_vertex\n");
+        exit(EXIT_FAILURE);
     }
-    double x = atof(numx) * 100;
-    ++i;
-    j = 0;
-    while (str[i] != ' ')
-    {
-        numy[j] = str[i];
-        ++i;
-        ++j;
-    }
-    double y = atof(numy) * 100;
-    ++i;
-    j = 0;
-    while (str[i] != '\0')
-    {
-        numz[j] = str[i];
-        ++i;
-        ++j;
-    }
-    double z = atof(numz) * 100;
 
-    if (x > xmax)
-        xmax = x;
-    if (x < xmin)
-        xmin = x;
-    if (y > ymax)
-        ymax = y;
-    if (y < ymin)
-        ymin = y;
-    if (z > zmax)
-        zmax = z;
-    if (z < zmin)
-        zmin = z;
-
-    if (*nvr == 1)
+    double x, y, z;
+    if (sscanf(line, "v %lf %lf %lf", &x, &y, &z) != 3)
     {
-        *fvertex = (struct obj_vertex *)malloc(2 * sizeof(struct obj_vertex));
-        (*fvertex)[0].x = 0;
-        (*fvertex)[0].y = 0;
-        (*fvertex)[0].z = 0;
+        fprintf(stderr, "Invalid vertex line: %s\n", line);
+        exit(EXIT_FAILURE);
+    }
+
+    int SCALING_FACTOR = 100;
+    x *= SCALING_FACTOR;
+    y *= SCALING_FACTOR;
+    z *= SCALING_FACTOR;
+
+    if (*vertex_count == 1)
+    {
+        *vertices = (struct obj_vertex *)malloc(2 * sizeof(struct obj_vertex));
+        (*vertices)[0].x = 0;
+        (*vertices)[0].y = 0;
+        (*vertices)[0].z = 0;
     }
     else
-        *fvertex = (struct obj_vertex *)realloc(*fvertex, (*nvr + 1) * sizeof(struct obj_vertex));
+    {
+        *vertices = (struct obj_vertex *)realloc(*vertices, (*vertex_count + 1) * sizeof(struct obj_vertex));
+    }
 
-    (*fvertex)->x = (xmin + xmax) / 2;
-    (*fvertex)->y = (ymin + ymax) / 2;
-    (*fvertex)->z = (zmin + zmax) / 2;
-    (*fvertex + *nvr)->x = x;
-    (*fvertex + *nvr)->y = y;
-    (*fvertex + *nvr)->z = z;
-    *nvr += 1;
+    if (!*vertices)
+    {
+        perror("Memory allocation failed for vertices");
+        exit(EXIT_FAILURE);
+    }
+
+    (*vertices)[*vertex_count].x = x;
+    (*vertices)[*vertex_count].y = y;
+    (*vertices)[*vertex_count].z = -z; // TODO ?
+    (*vertex_count)++;
 }
 
-void read_face(char *str, struct obj_triangle **triangle, int *ntr)
+void read_face(char *line, struct obj_triangle **triangles, int *triangle_count)
 {
-    char num[10], part[150][30];
-    int j = 0, i = 2, k = 0, poly[30];
-
-    while (1 == 1)
+    if (!line || !triangles || !triangle_count)
     {
-        if (str[i] == ' ')
+        fprintf(stderr, "Invalid arguments to read_face\n");
+        exit(EXIT_FAILURE);
+    }
+
+    int poly_indices[MAX_POLY_INDICES];
+    int vertex_count = 0;
+    char *ptr = line + 2;
+    const char *separator = " ";
+    char *vertex_triple = strtok(ptr, separator); // obj vertex description: vertex/texture/normal
+    while (vertex_triple != NULL)
+    {
+        int vertex_index;
+        int res = sscanf(vertex_triple, "%d", &vertex_index);
+        if (res == -1)
         {
-            part[k][j] = '\0';
-            if (str[i + 1] == '\0')
-                break;
-            ++i;
-            ++k;
-            j = 0;
-            continue;
-        }
-        else if (str[i] == '\0')
-        {
-            part[k][j] = '\0';
             break;
         }
-        part[k][j] = str[i];
-        ++j;
-        ++i;
+        poly_indices[vertex_count] = vertex_index;
+        vertex_triple = strtok(NULL, separator);
+        vertex_count++;
     }
 
-    for (i = 0; i <= k; ++i)
+    int triangle_count_in_polygon = vertex_count - 2;
+    int part_of_polygon = -1;
+    for (int i = 0; i < triangle_count_in_polygon; i++)
     {
-        j = 0;
-        while (part[i][j] != '/' && part[i][j] != '\0')
+        if (*triangle_count == 0)
         {
-            num[j] = part[i][j];
-            ++j;
+            *triangles = malloc(sizeof(struct obj_triangle));
         }
-        poly[i] = abs(atoi(num));
-        while (j >= 0)
-        {
-            num[j] = '\0';
-            --j;
-        }
-    }
-
-    int i0 = 0, i1 = 1, i2 = 2, A, B, C, part_of_polygon = -1;
-    while (i2 != k + 1)
-    {
-        A = poly[i0], B = poly[i1], C = poly[i2];
-        if (*ntr == 0)
-            *triangle = malloc(sizeof(struct obj_triangle));
         else
-            *triangle = (struct obj_triangle *)realloc(*triangle, (*ntr + 1) * sizeof(struct obj_triangle));
+        {
+            *triangles = (struct obj_triangle *)realloc(*triangles, (*triangle_count + 1) * sizeof(struct obj_triangle));
+        }
 
-        (*triangle + *ntr)->vertex_a = A;
-        (*triangle + *ntr)->vertex_b = B;
-        (*triangle + *ntr)->vertex_c = C;
-        (*triangle + *ntr)->part_of_polygon = part_of_polygon;
+        if (!*triangles)
+        {
+            perror("Memory allocation failed for triangles");
+            exit(EXIT_FAILURE);
+        }
+
+        struct obj_triangle *triangle = (*triangles + *triangle_count);
+
+        // Only the vertex index is needed
+        triangle->vertex_a = poly_indices[0];
+        triangle->vertex_b = poly_indices[i + 1];
+        triangle->vertex_c = poly_indices[i + 2];
+        triangle->part_of_polygon = part_of_polygon;
+
         if (part_of_polygon == -1)
         {
-            part_of_polygon = *ntr;
+            part_of_polygon = *triangle_count; // Set the polygon reference
         }
 
-        *ntr += 1;
-        ++i1;
-        ++i2;
+        (*triangle_count)++;
     }
 }
 
-void init_vertexes(struct obj_vertex **vertex, int nvr)
-{
-    *vertex = (struct obj_vertex *)malloc((nvr + 1) * sizeof(struct obj_vertex));
-}
-
-int is_object_valid(struct obj *object)
+int validate_object(struct obj *object)
 {
     if (object->number_of_vertices == 0 || object->number_of_triangles == 0)
     {
