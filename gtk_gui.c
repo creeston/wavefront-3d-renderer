@@ -20,6 +20,8 @@ gboolean on_rotate_y_slider_value_changed(GtkRange *range, gpointer user_data);
 gboolean on_rotate_z_slider_value_changed(GtkRange *range, gpointer user_data);
 gboolean on_rotate_x_slider_value_changed(GtkRange *range, gpointer user_data);
 gboolean on_change_rho_slider_value_changed(GtkRange *range, gpointer user_data);
+gboolean scroll_cb(GtkWidget *widget, GdkEventScroll *event, gpointer data);
+void on_shading_combo_changed(GtkComboBoxText *combo, gpointer user_data);
 void update_rotation_angles();
 
 void on_toggle_button_clicked(GtkButton *button, gpointer user_data);
@@ -42,14 +44,16 @@ double x, y, z = 0;
 double current_x_alpha = 0;
 double current_y_beta = 0;
 double current_z_gamma = 0;
+double current_scale_value = 50;
 
-static gboolean is_mouse_pressed = FALSE;
+static gboolean is_left_mouse_pressed = FALSE;
+static gboolean is_right_mouse_pressed = FALSE;
 static int prev_y = 0, prev_x = 0;
 
 static int currently_drawing = 0;
 
 struct color Red = {255, 0, 0};
-struct color Black = {100, 100, 100};
+struct color Black = {200, 200, 200};
 struct color White = {255, 255, 255};
 
 int WHITE_BACKGROUND = 0xffffffff;
@@ -103,10 +107,10 @@ gboolean configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, gpointe
     canvas_height = gtk_widget_get_allocated_height(widget);
     surface = gdk_window_create_similar_surface(gtk_widget_get_window(widget), CAIRO_CONTENT_COLOR, canvas_width, canvas_height);
     cr = cairo_create(surface);
-    gtk_widget_add_events(widget, GDK_BUTTON_PRESS_MASK | GDK_POINTER_MOTION_MASK | GDK_BUTTON_RELEASE_MASK);
+    gtk_widget_add_events(widget, GDK_BUTTON_PRESS_MASK | GDK_POINTER_MOTION_MASK | GDK_BUTTON_RELEASE_MASK | GDK_SCROLL_MASK);
     initialize_canvas_buffer(canvas_width, canvas_height);
     initialize_renderer(canvas_width, canvas_height);
-    set_color(White);
+    set_color(White, Black);
     return TRUE;
 }
 
@@ -242,14 +246,23 @@ gboolean timer_exe(GtkWidget *window)
 
 gboolean motion_notify_event_cb(GtkWidget *widget, GdkEventMotion *event, gpointer data)
 {
-    if (event->state && is_mouse_pressed)
+    if (event->state)
     {
         int x = event->x, y = event->y;
         int dx = x - prev_x, dy = y - prev_y;
         prev_x = x;
         prev_y = y;
 
-        move_obj_relative(dx, dy);
+        if (is_left_mouse_pressed)
+        {
+            current_x_alpha -= dy / 4;
+            current_y_beta += dx / 4;
+            update_rotation_angles();
+        }
+        else if (is_right_mouse_pressed)
+        {
+            move_obj_relative(dx, dy);
+        }
     }
     return TRUE;
 }
@@ -259,11 +272,13 @@ gboolean button_press_event_cb(GtkWidget *widget, GdkEventButton *event, gpointe
 {
     if (event->button == GDK_BUTTON_PRIMARY)
     { // Check if the left mouse button is pressed
-        is_mouse_pressed = TRUE;
+        is_left_mouse_pressed = TRUE;
         prev_x = event->x;
         prev_y = event->y;
-
-        get_pixel_info(prev_x, prev_y);
+    }
+    else if (event->button == GDK_BUTTON_SECONDARY)
+    {
+        is_right_mouse_pressed = TRUE;
     }
     return TRUE; // Returning TRUE stops the event from propagating further
 }
@@ -273,7 +288,81 @@ gboolean button_release_event_cb(GtkWidget *widget, GdkEventButton *event, gpoin
 {
     if (event->button == GDK_BUTTON_PRIMARY)
     {
-        is_mouse_pressed = FALSE;
+        is_left_mouse_pressed = FALSE;
+    }
+    else if (event->button == GDK_BUTTON_SECONDARY)
+    {
+        is_right_mouse_pressed = FALSE;
     }
     return TRUE;
+}
+
+gboolean scroll_cb(GtkWidget *widget, GdkEventScroll *event, gpointer data)
+{
+    switch (event->direction)
+    {
+    case GDK_SCROLL_UP:
+        current_scale_value += 1;
+        break;
+    case GDK_SCROLL_DOWN:
+        current_scale_value -= 1;
+        break;
+    case GDK_SCROLL_SMOOTH:
+        if (event->delta_y > 0)
+            current_scale_value += 1;
+        else
+            current_scale_value -= 1;
+        break;
+    }
+
+    current_scale_value = MAX(10, current_scale_value);
+    current_scale_value = MIN(200, current_scale_value);
+
+    double zoom = (double)(current_scale_value) / 100 - 0.5;
+    set_scale(1 + (zoom * 2));
+
+    return TRUE;
+}
+
+void on_shading_combo_changed(GtkComboBoxText *combo, gpointer user_data)
+{
+    const gchar *selected_option = gtk_combo_box_text_get_active_text(combo);
+    if (selected_option)
+    {
+        g_print("Selected shading option: %s\n", selected_option);
+
+        // Perform actions based on the selected option
+        if (g_strcmp0(selected_option, "No shading") == 0)
+        {
+            set_shading_type(NO_SHADING);
+        }
+        else if (g_strcmp0(selected_option, "Flat") == 0)
+        {
+            set_shading_type(FLAT);
+        }
+        else if (g_strcmp0(selected_option, "Gouraud") == 0)
+        {
+            set_shading_type(GOURAUD);
+        }
+
+        g_free((gchar *)selected_option); // Free the string
+    }
+}
+
+void on_toggle_draw_triangles_toggled(GtkToggleButton *toggle_button, gpointer user_data)
+{
+    gboolean is_active = gtk_toggle_button_get_active(toggle_button);
+    set_draw_triangles(is_active);
+}
+
+void on_toggle_draw_vertices_toggled(GtkToggleButton *toggle_button, gpointer user_data)
+{
+    gboolean is_active = gtk_toggle_button_get_active(toggle_button);
+    set_draw_vertices(is_active);
+}
+
+void on_toggle_draw_edges_toggled(GtkToggleButton *toggle_button, gpointer user_data)
+{
+    gboolean is_active = gtk_toggle_button_get_active(toggle_button);
+    set_draw_edges(is_active);
 }

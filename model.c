@@ -171,8 +171,8 @@ void read_vertex(char *line, struct obj_vertex **vertices, int *vertex_count)
         exit(EXIT_FAILURE);
     }
 
-    (*vertices)[*vertex_count].x = x;
-    (*vertices)[*vertex_count].y = y;
+    (*vertices)[*vertex_count].x = -x;
+    (*vertices)[*vertex_count].y = -y;
     (*vertices)[*vertex_count].z = -z; // TODO ?
     (*vertex_count)++;
 }
