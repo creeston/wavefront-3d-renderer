@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -g -std=c99 `pkg-config --cflags gtk+-3.0`
 LDFLAGS = `pkg-config --libs gtk+-3.0` -lm -rdynamic 
-SRCS = main.c gtk_gui.c gtk_drawing.c renderer.c utils.c wavefront_object_reader.c
+SRCS = src/main.c src/gtk_gui.c src/gtk_drawing.c src/renderer.c src/utils.c src/wavefront_object_reader.c
 TARGET = app
 
 all: $(TARGET)
@@ -15,7 +15,7 @@ $(TARGET): $(SRCS:.c=.o) resources.o
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Compile the resource XML file into a C source file
-resources.c: resources.xml gui.glade
+resources.c: resources/resources.xml resources/gui.glade
 	glib-compile-resources --target=$@ --generate-source $<
 
 # Compile the resource C source file into an object file

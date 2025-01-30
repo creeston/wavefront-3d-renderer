@@ -3,8 +3,8 @@
 #include <string.h>
 #include <math.h>
 
-#include "wavefront_object_reader.h"
-#include "utils.h"
+#include "../include/wavefront_object_reader.h"
+#include "../include/utils.h"
 
 void read_vertex(char *str, struct wavefront_obj_vertex **vertices, int *vertex_count);
 void read_face(char *str, struct wavefront_obj_triangle **triangles, int *triangles_count);

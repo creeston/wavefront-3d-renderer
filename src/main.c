@@ -1,6 +1,6 @@
 #include <argp.h>
 #include <stdlib.h>
-#include "gtk_gui.h"
+#include "../include/gtk_gui.h"
 
 const char *argp_program_version = "wavefront-obj-renderer 1.0";
 const char *argp_program_bug_address = "<mityy2012@gmail.com>";

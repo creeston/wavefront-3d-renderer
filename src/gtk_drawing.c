@@ -4,9 +4,9 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include "drawing.h"
-#include "gtk_drawing.h"
-#include "utils.h"
+#include "../include/drawing.h"
+#include "../include/gtk_drawing.h"
+#include "../include/utils.h"
 
 GdkPixbuf *pixel_buffer;
 guchar *pixels;

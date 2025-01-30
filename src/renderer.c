@@ -3,9 +3,9 @@
 #include <math.h>
 #include <stdlib.h>
 
-#include "drawing.h"
-#include "renderer.h"
-#include "utils.h"
+#include "../include/drawing.h"
+#include "../include/renderer.h"
+#include "../include/utils.h"
 
 struct vector_3d light_direction = {0, 0, 255};
 

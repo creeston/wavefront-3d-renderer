@@ -1,11 +1,11 @@
 #include <gtk/gtk.h>
 #include <math.h>
 
-#include "gtk_gui.h"
-#include "renderer.h"
-#include "utils.h"
-#include "wavefront_object_reader.h"
-#include "gtk_drawing.h"
+#include "../include/gtk_gui.h"
+#include "../include/renderer.h"
+#include "../include/utils.h"
+#include "../include/wavefront_object_reader.h"
+#include "../include/gtk_drawing.h"
 
 const struct color GREY = {200, 200, 200};
 const struct color WHITE = {255, 255, 255};
@@ -78,7 +78,7 @@ void init_gui(struct arguments arguments, int argc, char **argv)
     gtk_init(&argc, &argv);
 
     builder = gtk_builder_new();
-    gtk_builder_add_from_resource(builder, "/com/creeston/wavefront-3d-renderer/gui.glade", NULL);
+    gtk_builder_add_from_resource(builder, "/com/creeston/wavefront-3d-renderer/resources/gui.glade", NULL);
     window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
     gtk_builder_connect_signals(builder, NULL);
 
