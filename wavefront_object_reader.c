@@ -1,19 +1,21 @@
-#include "model.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 
-void read_vertex(char *str, struct obj_vertex **vertices, int *vertex_count);
-void read_face(char *str, struct obj_triangle **triangles, int *triangles_count);
-int validate_object(struct obj *object);
+#include "wavefront_object_reader.h"
+#include "utils.h"
 
-#define LINE_BUFFER_SIZE 256
-#define MAX_NUM_LENGTH 32
-#define SQR(x) ((x) * (x))
-#define MAX_POLY_INDICES 30
+void read_vertex(char *str, struct wavefront_obj_vertex **vertices, int *vertex_count);
+void read_face(char *str, struct wavefront_obj_triangle **triangles, int *triangles_count);
+int validate_object(struct wavefront_obj *object);
 
-void read_object(const char *filename, struct obj *object)
+const int LINE_BUFFER_SIZE = 256;
+const int MAX_NUM_LENGTH = 32;
+const int MAX_POLY_INDICES = 30;
+const double BIG = 1e30;
+
+int read_object(const char *filename, struct wavefront_obj *object)
 {
     if (!filename || !object)
     {
@@ -28,8 +30,8 @@ void read_object(const char *filename, struct obj *object)
         exit(EXIT_FAILURE);
     }
 
-    struct obj_vertex *vertices = NULL;
-    struct obj_triangle *triangles = NULL;
+    struct wavefront_obj_vertex *vertices = NULL;
+    struct wavefront_obj_triangle *triangles = NULL;
     int vertex_count = 1, triangle_count = 0;
 
     char line[LINE_BUFFER_SIZE];
@@ -61,7 +63,6 @@ void read_object(const char *filename, struct obj *object)
 
     if (!validate_object(object))
     {
-        fprintf(stderr, "Invalid object data\n");
         if (object->vertices != NULL)
         {
             free(object->vertices);
@@ -72,7 +73,7 @@ void read_object(const char *filename, struct obj *object)
             free(object->triangles);
         }
 
-        exit(EXIT_FAILURE);
+        return 0;
     }
 
     double xmin = BIG, ymin = BIG, zmin = BIG, xmax = -BIG, ymax = -BIG, zmax = -BIG;
@@ -124,16 +125,17 @@ void read_object(const char *filename, struct obj *object)
     object->vertices[0].y = 0;
     object->vertices[0].z = 0;
 
-    object->largest_dimension = sqrt(SQR(xmax - xmin) + SQR(ymax - ymin) + SQR(zmax - zmin));
     object->x_min = xmin;
     object->x_max = xmax;
     object->y_min = ymin;
     object->y_max = ymax;
     object->z_min = zmin;
     object->z_max = zmax;
+
+    return 1;
 }
 
-void read_vertex(char *line, struct obj_vertex **vertices, int *vertex_count)
+void read_vertex(char *line, struct wavefront_obj_vertex **vertices, int *vertex_count)
 {
     if (!line || !vertices || !vertex_count)
     {
@@ -155,14 +157,14 @@ void read_vertex(char *line, struct obj_vertex **vertices, int *vertex_count)
 
     if (*vertex_count == 1)
     {
-        *vertices = (struct obj_vertex *)malloc(2 * sizeof(struct obj_vertex));
+        *vertices = (struct wavefront_obj_vertex *)malloc(2 * sizeof(struct wavefront_obj_vertex));
         (*vertices)[0].x = 0;
         (*vertices)[0].y = 0;
         (*vertices)[0].z = 0;
     }
     else
     {
-        *vertices = (struct obj_vertex *)realloc(*vertices, (*vertex_count + 1) * sizeof(struct obj_vertex));
+        *vertices = (struct wavefront_obj_vertex *)realloc(*vertices, (*vertex_count + 1) * sizeof(struct wavefront_obj_vertex));
     }
 
     if (!*vertices)
@@ -177,7 +179,7 @@ void read_vertex(char *line, struct obj_vertex **vertices, int *vertex_count)
     (*vertex_count)++;
 }
 
-void read_face(char *line, struct obj_triangle **triangles, int *triangle_count)
+void read_face(char *line, struct wavefront_obj_triangle **triangles, int *triangle_count)
 {
     if (!line || !triangles || !triangle_count)
     {
@@ -209,11 +211,11 @@ void read_face(char *line, struct obj_triangle **triangles, int *triangle_count)
     {
         if (*triangle_count == 0)
         {
-            *triangles = malloc(sizeof(struct obj_triangle));
+            *triangles = malloc(sizeof(struct wavefront_obj_triangle));
         }
         else
         {
-            *triangles = (struct obj_triangle *)realloc(*triangles, (*triangle_count + 1) * sizeof(struct obj_triangle));
+            *triangles = (struct wavefront_obj_triangle *)realloc(*triangles, (*triangle_count + 1) * sizeof(struct wavefront_obj_triangle));
         }
 
         if (!*triangles)
@@ -222,7 +224,7 @@ void read_face(char *line, struct obj_triangle **triangles, int *triangle_count)
             exit(EXIT_FAILURE);
         }
 
-        struct obj_triangle *triangle = (*triangles + *triangle_count);
+        struct wavefront_obj_triangle *triangle = (*triangles + *triangle_count);
 
         // Only the vertex index is needed
         triangle->vertex_a = poly_indices[0];
@@ -239,7 +241,7 @@ void read_face(char *line, struct obj_triangle **triangles, int *triangle_count)
     }
 }
 
-int validate_object(struct obj *object)
+int validate_object(struct wavefront_obj *object)
 {
     if (object->number_of_vertices == 0 || object->number_of_triangles == 0)
     {
@@ -248,7 +250,7 @@ int validate_object(struct obj *object)
 
     for (int i = 0; i < object->number_of_triangles; ++i)
     {
-        struct obj_triangle triangle = object->triangles[i];
+        struct wavefront_obj_triangle triangle = object->triangles[i];
         if (triangle.vertex_a > object->number_of_vertices || triangle.vertex_b > object->number_of_vertices || triangle.vertex_c > object->number_of_vertices)
         {
             printf("Invalid triangle vertices\n");

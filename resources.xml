@@ -1,0 +1,5 @@
+<gresources>
+  <gresource prefix="/com/creeston/wavefront-3d-renderer">
+    <file>gui.glade</file>
+  </gresource>
+</gresources>

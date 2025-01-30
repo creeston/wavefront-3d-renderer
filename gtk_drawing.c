@@ -1,8 +1,11 @@
 #include <cairo.h>
 #include <gtk/gtk.h>
 #include <assert.h>
+#include <stdlib.h>
+#include <math.h>
 
-#include "canvas_drawing.h"
+#include "drawing.h"
+#include "gtk_drawing.h"
 #include "utils.h"
 
 GdkPixbuf *pixel_buffer;
@@ -27,19 +30,14 @@ void initialize_canvas_buffer(int canvas_width, int canvas_height)
     pixels = gdk_pixbuf_get_pixels(pixel_buffer);
 }
 
-void draw_pixel(int x, int y, struct color color)
+void draw_pixel(int x, int y, int r, int g, int b)
 {
     assert(pixels != NULL);
 
     guchar *p = pixels + y * rowstride + x * n_channels;
-    p[0] = color.r;
-    p[1] = color.g;
-    p[2] = color.b;
-}
-
-void clear_buffer()
-{
-    fill_buffer(0x000000);
+    p[0] = r;
+    p[1] = g;
+    p[2] = b;
 }
 
 void fill_buffer(int color)
@@ -50,9 +48,4 @@ void fill_buffer(int color)
 void set_pixbuf_for_surface(cairo_t *surface)
 {
     gdk_cairo_set_source_pixbuf(surface, pixel_buffer, 1, 1);
-}
-
-gboolean is_ready_to_draw()
-{
-    return pixel_buffer != NULL;
 }

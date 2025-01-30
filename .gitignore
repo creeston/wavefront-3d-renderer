@@ -1,3 +1,5 @@
 app.*
 app
 build
+*.o
+resources.c

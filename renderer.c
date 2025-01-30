@@ -1,173 +1,122 @@
-#include "renderer.h"
-#include "utils.h"
 #include <string.h>
 #include <assert.h>
+#include <math.h>
+#include <stdlib.h>
 
-struct vertex_2d
-{
-    int x, y;
-    float depth;
-};
-
-struct vector_3d
-{
-    double x, y, z;
-};
-
-struct triangle_vector
-{
-    // normalized normal vector to the plane.
-    struct vector_3d norm;
-
-    // Distance from the triangle plane to the origin along the triangle's normal direction
-    // The signed value of h distinguishes the side of the plane the origin lies on:
-    // Positive h means the origin is on one side of the plane.
-    // Negative h means the origin is on the opposite side.
-    double h;
-};
+#include "drawing.h"
+#include "renderer.h"
+#include "utils.h"
 
 struct vector_3d light_direction = {0, 0, 255};
-double v11, v12, v13, v21, v22, v23, v32, v33, v43;
-double d;
-double initial_d = 0;
 
-int c1, c2;
 int x_viewpoint_range, y_viewpoint_range;
 
+struct wavefront_obj current_object;
+
 double *zbuffer;
-struct obj *previsouly_rendered_object;
-struct obj *current_object;
 struct vector_3d *vertices;
 struct vector_3d *vertex_normals;
 struct triangle_vector *triangle_vectors;
+
 struct color current_color;
 struct color current_edge_color;
-
+int current_background_color;
 double theta, phi, rho;
-int translation = 500;
 double alpha = 0, beta = 0, gamma = 0;
 int dx, dy = 0;
-
-int pixel_x_info = -1, pixel_y_info = -1;
-
-int should_draw_vertices = 1;
-int should_draw_triangles = 1;
-int should_draw_edges = 0;
+double scale;
+double initial_scale = 0;
+int camera_distance = 500;
 enum shading_type current_shading_type = FLAT;
 
-#define BIG_INT 2147483647
-#define EPS 1.e-5
-#define M_EPS -1.e-5
-#define ONE_PLUS 1 + 1.e-5
-#define ONE_MINUS 1 - 1.e-5
+const int BIG_INT = 2147483647;
 
-#define M_PI 3.14159265358979323846
-
-#define SQR(x) ((x) * (x))
-#define DEG_TO_RAD(deg) ((deg) * M_PI / 180.0)
-#define RAD_TO_DEG(rad) ((rad) * 180.0 / M_PI)
-
-void rasterize_triangle(struct vertex_2d A, struct vertex_2d B, struct vertex_2d C, struct color color);
-void render_triangles(struct obj_triangle *triangles, struct triangle_vector *triangle_vectors, int number_of_triangles, struct vector_3d *vertices, int number_of_vertices);
-void render_triangle(struct obj_triangle triangle, struct triangle_vector triangle_vector, struct vector_3d *vertices, int number_of_vertices);
-void rasterize_line(int x_i, double z_i, int x_j, double z_j, int y, struct color color);
-void rasterize_vertex(struct vertex_2d vertex, struct color color);
 void initialize_z_buffer();
-void calculate_rotated_vertices(struct obj_vertex *object_vertices, int number_of_vertices);
+void reset_z_buffer();
+
+void render_triangles(struct wavefront_obj_triangle *triangles, struct triangle_vector *triangle_vectors, int number_of_triangles, struct vector_3d *vertices, int number_of_vertices);
+void render_triangle(struct wavefront_obj_triangle triangle, struct triangle_vector triangle_vector, struct vector_3d *vertices, int number_of_vertices);
+void rasterize_triangle(struct vertex_2d v1, struct vertex_2d v2, struct vertex_2d v3, struct vector_3d triangle_normal, struct color color);
+
+double calculate_camera_distance(struct wavefront_obj object);
+void calculate_rotated_vertices(struct wavefront_obj_vertex *object_vertices, int number_of_vertices);
 void calculate_scale(struct vector_3d *vertices, int number_of_vertices);
-void calculate_triangle_vectors(struct obj_triangle *triangles, int number_of_triangles);
-int project_x_coordinate(struct vector_3d vertex);
-int project_y_coordinate(struct vector_3d vertex);
+void calculate_triangle_vectors(struct wavefront_obj_triangle *triangles, int number_of_triangles);
 struct vertex_2d project_vertex(struct vector_3d vertex);
 void normalize_vector(struct vector_3d *vec);
-struct vector_3d rotate_vertex(struct obj_vertex object_vertex);
-void reset_z_buffer();
-void swap_vertices(struct vertex_2d *A, struct vertex_2d *B);
-void calculate_rotation_matrix();
-struct triangle_vector calculate_triangle_vector(struct obj_triangle triangle);
+struct vector_3d rotate_vertex(struct wavefront_obj_vertex object_vertex);
+struct triangle_vector calculate_triangle_vector(struct wavefront_obj_triangle triangle);
 double calculate_vertex_intensity(int vertex_index);
-void calculate_vertex_normals(struct obj_triangle *triangles, int number_of_triangles, int number_of_vertices);
-void rasterize_triangle_with_intensities(struct vertex_2d v1, double i1,
-                                         struct vertex_2d v2, double i2,
-                                         struct vertex_2d v3, double i3,
-                                         struct color base_color);
-void rasterize_line_with_intensity(int x_start, double z_start, int x_end, double z_end, int y, struct color base_color,
-                                   double intensity_start, double intensity_end);
+void calculate_vertex_normals(struct wavefront_obj_triangle *triangles, int number_of_triangles, int number_of_vertices);
 
 void initialize_renderer()
 {
     x_viewpoint_range = x_viewpoint_max - x_viewpoint_min;
     y_viewpoint_range = y_viewpoint_max - y_viewpoint_min;
     initialize_z_buffer();
+
+    if (current_object.number_of_vertices > 0)
+    {
+        calculate_rotated_vertices(current_object.vertices, current_object.number_of_vertices);
+        calculate_scale(vertices, current_object.number_of_vertices);
+    }
 }
 
-void get_pixel_info(int x, int y)
+void set_object_to_render(struct wavefront_obj object)
 {
-    pixel_x_info = x;
-    pixel_y_info = y;
-}
-
-void set_scale(float scale)
-{
-    d = initial_d * scale;
-}
-
-void set_object_to_render(struct obj *object)
-{
-    if (current_object != NULL)
+    if (vertices != NULL)
     {
         free(vertices);
+    }
+    if (vertex_normals != NULL)
+    {
+        free(vertex_normals);
+    }
+    if (triangle_vectors != NULL)
+    {
         free(triangle_vectors);
     }
 
     current_object = object;
 
-    struct obj_vertex *object_vertices = object->vertices;
-    int number_of_vertices = object->number_of_vertices;
-    int number_of_triangles = object->number_of_triangles;
+    int number_of_vertices = current_object.number_of_vertices;
+    int number_of_triangles = current_object.number_of_triangles;
 
     vertices = (struct vector_3d *)malloc((number_of_vertices + 1) * sizeof(struct vector_3d));
     vertex_normals = (struct vector_3d *)malloc((number_of_vertices + 1) * sizeof(struct vector_3d));
     triangle_vectors = (struct triangle_vector *)malloc(number_of_triangles * sizeof(struct triangle_vector));
 
-    double fov = 30;
-    double fov_radians = DEG_TO_RAD(fov);
-    translation = object->largest_dimension / (2 * tan(fov_radians / 2));
-
-    calculate_rotated_vertices(object_vertices, number_of_vertices);
+    camera_distance = calculate_camera_distance(current_object);
+    calculate_rotated_vertices(current_object.vertices, number_of_vertices);
     calculate_scale(vertices, number_of_vertices);
-}
-
-int get_translation()
-{
-    return translation;
-}
-
-void set_color(struct color color, struct color edge_color)
-{
-    current_color = color;
-    current_edge_color = edge_color;
 }
 
 void render()
 {
-    if (current_object == NULL)
+    fill_buffer(current_background_color);
+
+    if (current_object.vertices == NULL || current_object.triangles == NULL)
     {
         return;
     }
 
-    struct obj_vertex *object_vertices = current_object->vertices;
-    struct obj_triangle *object_triangles = current_object->triangles;
-    int number_of_vertices = current_object->number_of_vertices;
-    int number_of_triangles = current_object->number_of_triangles;
+    struct wavefront_obj_vertex *object_vertices = current_object.vertices;
+    struct wavefront_obj_triangle *object_triangles = current_object.triangles;
+    int number_of_vertices = current_object.number_of_vertices;
+    int number_of_triangles = current_object.number_of_triangles;
 
     calculate_rotated_vertices(object_vertices, number_of_vertices);
     calculate_triangle_vectors(object_triangles, number_of_triangles);
-    calculate_vertex_normals(object_triangles, number_of_triangles, number_of_vertices);
+
+    if (current_shading_type == GOURAUD)
+    {
+        calculate_vertex_normals(object_triangles, number_of_triangles, number_of_vertices);
+    }
+
     render_triangles(object_triangles, triangle_vectors, number_of_triangles, vertices, number_of_vertices);
 }
 
-void render_triangles(struct obj_triangle *triangles, struct triangle_vector *triangle_vectors, int number_of_triangles, struct vector_3d *vertices, int number_of_vertices)
+void render_triangles(struct wavefront_obj_triangle *triangles, struct triangle_vector *triangle_vectors, int number_of_triangles, struct vector_3d *vertices, int number_of_vertices)
 {
     reset_z_buffer();
     normalize_vector(&light_direction);
@@ -177,21 +126,14 @@ void render_triangles(struct obj_triangle *triangles, struct triangle_vector *tr
     }
 }
 
-void render_triangle(struct obj_triangle triangle, struct triangle_vector triangle_vector, struct vector_3d *vertices, int number_of_vertices)
+void render_triangle(struct wavefront_obj_triangle triangle, struct triangle_vector triangle_vector, struct vector_3d *vertices, int number_of_vertices)
 {
     double h = triangle_vector.h;
 
     if (h < 0)
     {
-        // Negative h means the origin is on the opposite side.
+        // Negative h means triangle is facing the viewpoint
         return;
-    }
-
-    struct vector_3d norm = triangle_vector.norm;
-    double intensity = light_direction.x * norm.x + light_direction.y * norm.y + light_direction.z * norm.z;
-    if (intensity < 0)
-    {
-        intensity = 0;
     }
 
     int vertex_a_idx = triangle.vertex_a;
@@ -206,36 +148,14 @@ void render_triangle(struct obj_triangle triangle, struct triangle_vector triang
     struct vertex_2d projected_vertex_b = project_vertex(vertex_b);
     struct vertex_2d projected_vertex_c = project_vertex(vertex_c);
 
-    double intensity_a = calculate_vertex_intensity(vertex_a_idx);
-    double intensity_b = calculate_vertex_intensity(vertex_b_idx);
-    double intensity_c = calculate_vertex_intensity(vertex_c_idx);
-
-    struct color intensity_modified_color = {current_color.r * intensity, current_color.g * intensity, current_color.b * intensity};
-    struct color triangle_color;
-    if (current_shading_type == FLAT)
+    if (current_shading_type == GOURAUD)
     {
-        triangle_color = intensity_modified_color;
-    }
-    else if (current_shading_type == NO_SHADING)
-    {
-        triangle_color = current_color;
-    }
-    else if (current_shading_type == GOURAUD)
-    {
-        rasterize_triangle_with_intensities(projected_vertex_a, intensity_a, projected_vertex_b, intensity_b, projected_vertex_c, intensity_c, current_color);
+        projected_vertex_a.intensity = calculate_vertex_intensity(vertex_a_idx);
+        projected_vertex_b.intensity = calculate_vertex_intensity(vertex_b_idx);
+        projected_vertex_c.intensity = calculate_vertex_intensity(vertex_c_idx);
     }
 
-    if (should_draw_vertices)
-    {
-        rasterize_vertex(projected_vertex_a, triangle_color);
-        rasterize_vertex(projected_vertex_b, triangle_color);
-        rasterize_vertex(projected_vertex_c, triangle_color);
-    }
-
-    if (should_draw_triangles)
-    {
-        rasterize_triangle(projected_vertex_a, projected_vertex_b, projected_vertex_c, triangle_color);
-    }
+    rasterize_triangle(projected_vertex_a, projected_vertex_b, projected_vertex_c, triangle_vector.norm, current_color);
 }
 
 void initialize_z_buffer()
@@ -253,12 +173,11 @@ void initialize_z_buffer()
     }
 }
 
-void calculate_rotated_vertices(struct obj_vertex *object_vertices, int number_of_vertices)
+void calculate_rotated_vertices(struct wavefront_obj_vertex *object_vertices, int number_of_vertices)
 {
     for (int i = 1; i <= number_of_vertices; ++i)
     {
-        struct obj_vertex object_vertex = object_vertices[i];
-        vertices[i] = rotate_vertex(object_vertex);
+        vertices[i] = rotate_vertex(object_vertices[i]);
     }
 }
 
@@ -302,16 +221,16 @@ void calculate_scale(struct vector_3d *vertices, int number_of_vertices)
     double fx = x_viewpoint_range / x_range;
     double fy = y_viewpoint_range / y_range;
 
-    d = fy;
-    initial_d = d;
+    scale = fy;
+    initial_scale = scale;
 }
 
-void calculate_triangle_vectors(struct obj_triangle *triangles, int number_of_triangles)
+void calculate_triangle_vectors(struct wavefront_obj_triangle *triangles, int number_of_triangles)
 {
     // First we calculate vector of each triangle (which is a part of bigger polygon)
     for (int i = 0; i < number_of_triangles; ++i)
     {
-        struct obj_triangle triangle = triangles[i];
+        struct wavefront_obj_triangle triangle = triangles[i];
         if (triangles[i].part_of_polygon != -1)
         {
             continue;
@@ -323,7 +242,7 @@ void calculate_triangle_vectors(struct obj_triangle *triangles, int number_of_tr
     // Then we assign the same vector to all triangles that are part of the same polygon
     for (int i = 0; i < number_of_triangles; ++i)
     {
-        struct obj_triangle triangle = triangles[i];
+        struct wavefront_obj_triangle triangle = triangles[i];
         if (triangles[i].part_of_polygon == -1)
         {
             continue;
@@ -334,7 +253,7 @@ void calculate_triangle_vectors(struct obj_triangle *triangles, int number_of_tr
     }
 }
 
-struct triangle_vector calculate_triangle_vector(struct obj_triangle triangle)
+struct triangle_vector calculate_triangle_vector(struct wavefront_obj_triangle triangle)
 {
     int vertex_a_index = triangle.vertex_a;
     int vertex_b_index = triangle.vertex_b;
@@ -359,180 +278,113 @@ struct triangle_vector calculate_triangle_vector(struct obj_triangle triangle)
     return triangle_vector;
 }
 
-void rasterize_triangle(struct vertex_2d v1, struct vertex_2d v2, struct vertex_2d v3, struct color color)
+// Read more: https://jtsorlinis.github.io/rendering-tutorial/
+double edge_function(struct vertex_2d a, struct vertex_2d b, struct vertex_2d c)
+{
+    return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+};
+
+void rasterize_triangle(struct vertex_2d v1, struct vertex_2d v2, struct vertex_2d v3, struct vector_3d triangle_normal, struct color base_color)
 {
     if (v1.y == v2.y && v1.y == v3.y)
-    {
         return;
-    }
-    if (v1.y > v2.y)
-    {
-        swap_vertices(&v1, &v2);
-    }
-    if (v1.y > v3.y)
-    {
-        swap_vertices(&v1, &v3);
-    }
-    if (v2.y > v3.y)
-    {
-        swap_vertices(&v2, &v3);
-    }
 
-    int total_height = v3.y - v1.y; // v1 is the bottom vertex, v3 is the top vertex
-    int first_segment_height = v2.y - v1.y;
-    int second_segment_height = v3.y - v2.y;
+    double V2V1X = v2.x - v1.x;
+    double V2V1Y = v2.y - v1.y;
+    double V3V1X = v3.x - v1.x;
+    double V3V1Y = v3.y - v1.y;
+    double V3V2X = v3.x - v2.x;
+    double V3V2Y = v3.y - v2.y;
+    double V1V3X = v1.x - v3.x;
+    double V1V3Y = v1.y - v3.y;
 
-    if (total_height == 0)
+    float area = V2V1X * V3V1Y - V3V1X * V2V1Y; // edge_function(v1, v2, v3);
+    if (area == 0)
+        return; // Triangle has no area
+    float area_inv = 1.0 / area;
+
+    struct color triangle_color = base_color;
+
+    if (current_shading_type == FLAT)
     {
-        return;
-    }
-
-    int y_start = v1.y;
-
-    for (int y_index = 0; y_index < first_segment_height; y_index++)
-    {
-        int y = y_start + y_index;
-        if (y <= y_viewpoint_min || y >= y_viewpoint_max)
+        double intensity = light_direction.x * triangle_normal.x + light_direction.y * triangle_normal.y + light_direction.z * triangle_normal.z;
+        if (intensity < 0)
         {
-            // Do not draw pixels outside the viewport
-            continue;
+            intensity = 0;
         }
 
-        double alpha = (double)(y_index) / total_height;
-        double beta = (double)(y_index) / first_segment_height;
-
-        int x_start = alpha * v3.x + v1.x * (1 - alpha);
-        double z_start = alpha * v3.depth + v1.depth * (1 - alpha);
-
-        int x_end = beta * v2.x + v1.x * (1 - beta);
-        double z_end = beta * v2.depth + v1.depth * (1 - beta);
-
-        if (x_start > x_end)
-        {
-            swap_integers(&x_start, &x_end);
-        }
-
-        rasterize_line(x_start, z_start, x_end, z_end, y, color);
+        triangle_color = (struct color){base_color.r * intensity, base_color.g * intensity, base_color.b * intensity};
     }
 
-    if (second_segment_height == 0)
+    // Compute bounding box
+    int min_x = fmin(fmin(v1.x, v2.x), v3.x);
+    int max_x = fmax(fmax(v1.x, v2.x), v3.x);
+    int min_y = fmin(fmin(v1.y, v2.y), v3.y);
+    int max_y = fmax(fmax(v1.y, v2.y), v3.y);
+
+    // Clamp bounding box to viewport
+    min_y = fmax(min_y, y_viewpoint_min + 1);
+    max_y = fmin(max_y, y_viewpoint_max - 1);
+
+    min_x = fmax(min_x, x_viewpoint_min + 1);
+    max_x = fmin(max_x, x_viewpoint_max - 1);
+
+    // Loop over bounding box
+    for (int y = min_y; y <= max_y; y++)
     {
-        return;
-    }
+        // Precompute edge functions
+        double V3V2X_VPV2Y = V3V2X * (y - v2.y);
+        double V1V3X_VPV3Y = V1V3X * (y - v3.y);
+        double V2V1X_VPV1Y = V2V1X * (y - v1.y);
 
-    for (int y_index = first_segment_height; y_index < total_height; y_index++)
-    {
-        int y = y_start + y_index;
-        if (y <= y_viewpoint_min || y >= y_viewpoint_max)
+        for (int x = min_x; x <= max_x; x++)
         {
-            continue;
+            // Compute barycentric coordinates
+            float w1 = (V3V2X_VPV2Y - V3V2Y * (x - v2.x)) * area_inv; // edge_function(v2, v3, p {x, y})
+            float w2 = (V1V3X_VPV3Y - V1V3Y * (x - v3.x)) * area_inv; // edge_function(v3, v1, p {x, y})
+            float w3 = (V2V1X_VPV1Y - V2V1Y * (x - v1.x)) * area_inv; // edge_function(v1, v2, p {x, y})
+
+            if (w1 < 0 || w2 < 0 || w3 < 0)
+                // If outside triangle
+                continue;
+
+            // Interpolate depth (z)
+            double z = w1 * v1.depth + w2 * v2.depth + w3 * v3.depth;
+            if (z <= 0)
+                continue; // Behind the viewpoint
+
+            int pixel_index = x + x_viewpoint_range * y;
+            if (zbuffer[pixel_index] <= z)
+                continue; // Pixel is behind the drawn one
+
+            if (current_shading_type == NO_SHADING)
+            {
+                if (w1 <= 0.01 || w2 <= 0.01 || w3 <= 0.01)
+                    draw_pixel(x, y, current_edge_color.r, current_edge_color.g, current_edge_color.b); // Pixel is on the edge of the triangle
+                else
+                    draw_pixel(x, y, triangle_color.r, triangle_color.g, triangle_color.b);
+            }
+            else if (current_shading_type == FLAT)
+            {
+                draw_pixel(x, y, triangle_color.r, triangle_color.g, triangle_color.b);
+            }
+            else if (current_shading_type == GOURAUD)
+            {
+                double intensity = w1 * v1.intensity + w2 * v2.intensity + w3 * v3.intensity;
+                draw_pixel(x, y, base_color.r * intensity, base_color.g * intensity, base_color.b * intensity);
+            }
+            zbuffer[pixel_index] = z;
         }
-
-        double alpha = (float)(y_index) / total_height;
-        double beta = (float)(y_index - first_segment_height) / second_segment_height;
-
-        int x_start = alpha * v3.x + v1.x * (1 - alpha);
-        double z_start = alpha * v3.depth + v1.depth * (1 - alpha);
-
-        int x_end = beta * v3.x + v2.x * (1 - beta);
-        double z_end = beta * v3.depth + v2.depth * (1 - beta);
-
-        if (x_start > x_end)
-        {
-            swap_integers(&x_start, &x_end);
-        }
-
-        rasterize_line(x_start, z_start, x_end, z_end, y, color);
-    }
-}
-
-void rasterize_vertex(struct vertex_2d vertex, struct color color)
-{
-    int x = vertex.x;
-    int y = vertex.y;
-
-    if (x <= x_viewpoint_min || x >= x_viewpoint_max || y <= y_viewpoint_min || y >= y_viewpoint_max)
-    {
-        return;
-    }
-
-    int pixel_index = x + x_viewpoint_range * y;
-    double current_z_value = zbuffer[pixel_index];
-    if (current_z_value <= vertex.depth)
-    {
-        return;
-    }
-
-    draw_pixel(x, y, color);
-    zbuffer[pixel_index] = vertex.depth;
-}
-
-void rasterize_line(int x_start, double z_start, int x_end, double z_end, int y, struct color color)
-{
-    int line_length = x_end - x_start;
-    double line_depth = z_end - z_start;
-    for (int x_index = 0; x_index <= line_length; x_index++)
-    {
-        int x = x_start + x_index;
-        if (x <= x_viewpoint_min || x >= x_viewpoint_max)
-        {
-            // Do not draw pixels outside the viewport
-            continue;
-        }
-
-        double phi = line_length == 0 ? 1. : (double)x_index / (double)line_length; // ranges from 0 to 1 depending on current x
-        double z = z_start + line_depth * phi;                                      // interpolate z value
-        if (z <= 0)
-        {
-            // Do not draw pixels behind the viewpoint
-            continue;
-        }
-
-        if (x == pixel_x_info && y == pixel_y_info)
-        {
-            printf("X: %d, Y: %d, Z value: %f\n", x, y, z);
-            pixel_x_info = -1;
-            pixel_y_info = -1;
-        }
-
-        int pixel_index = x + x_viewpoint_range * y;
-        double current_z_value = zbuffer[pixel_index];
-        if (current_z_value <= z)
-        {
-            // then pixel is behind the current one
-            continue;
-        }
-
-        if (should_draw_edges && (x_index == 0 || x_index == line_length))
-        {
-            draw_pixel(x, y, current_edge_color);
-        }
-        else
-        {
-            draw_pixel(x, y, color);
-        }
-
-        zbuffer[pixel_index] = z;
     }
 }
 
 struct vertex_2d project_vertex(struct vector_3d vertex)
 {
     struct vertex_2d v;
-    v.x = project_x_coordinate(vertex);
-    v.y = project_y_coordinate(vertex);
+    v.x = (int)((vertex.x / vertex.z) * scale + dx);
+    v.y = (int)((vertex.y / vertex.z) * scale + dy);
     v.depth = vertex.z;
     return v;
-}
-
-int project_x_coordinate(struct vector_3d vertex)
-{
-    return (int)((vertex.x / vertex.z) * d + dx);
-}
-
-int project_y_coordinate(struct vector_3d vertex)
-{
-    return (int)((vertex.y / vertex.z) * d + dy);
 }
 
 void normalize_vector(struct vector_3d *vec)
@@ -544,25 +396,7 @@ void normalize_vector(struct vector_3d *vec)
     vec->z /= r;
 }
 
-struct vector_3d apply_rotation_matrix(struct obj_vertex object_vertex, struct obj_vertex original_vertex)
-{
-    double x_o = original_vertex.x;
-    double y_o = original_vertex.y;
-    double z_o = original_vertex.z;
-
-    double x = object_vertex.x;
-    double y = object_vertex.y;
-    double z = object_vertex.z;
-
-    double pxe = (v11 * (x - x_o) + v21 * (y - y_o)) + x_o;
-    double pye = (v12 * (x - x_o) + v22 * (y - y_o) + v32 * (z - z_o)) + y_o;
-    double pze = (v13 * (x - x_o) + v23 * (y - y_o) + v33 * (z - z_o) + v43) + z_o;
-
-    struct vector_3d rotated_vertex = {pxe, pye, pze};
-    return rotated_vertex;
-}
-
-struct vector_3d rotate_vertex(struct obj_vertex object_vertex)
+struct vector_3d rotate_vertex(struct wavefront_obj_vertex object_vertex)
 {
     double x = object_vertex.x;
     double y = object_vertex.y;
@@ -591,43 +425,11 @@ struct vector_3d rotate_vertex(struct obj_vertex object_vertex)
     double y_rot = r21 * x + r22 * y + r23 * z;
     double z_rot = r31 * x + r32 * y + r33 * z;
 
-    z_rot += translation;
+    z_rot += camera_distance;
 
     // Translate back to original position
     struct vector_3d rotated_vertex = {x_rot, y_rot, z_rot};
     return rotated_vertex;
-}
-
-void set_cartesian_translation(double alpha_value, double beta_value, double gamma_value)
-{
-    alpha = alpha_value;
-    beta = beta_value;
-    gamma = gamma_value;
-}
-
-void set_translation(int translation_value)
-{
-    translation = translation_value;
-}
-
-void calculate_rotation_matrix()
-{
-    double costh, sinth, cosph, sinph, factor;
-
-    costh = cos(theta);
-    sinth = sin(theta);
-    cosph = cos(phi);
-    sinph = sin(phi);
-
-    v11 = -sinth;
-    v12 = -cosph * costh;
-    v13 = -sinph * costh;
-    v21 = costh;
-    v22 = -cosph * sinth;
-    v23 = -sinph * sinth;
-    v32 = sinph;
-    v33 = -cosph;
-    v43 = rho;
 }
 
 void reset_z_buffer()
@@ -639,228 +441,20 @@ void reset_z_buffer()
     }
 }
 
-void move_obj_relative(int dx_value, int dy_value)
-{
-    dx += dx_value;
-    dy += dy_value;
-}
-
-void move_obj_absolute(struct obj *object, int x, int y, int z)
-{
-    int dx = x - object->vertices[0].x;
-    int dy = y - object->vertices[0].y;
-    int dz = z - object->vertices[0].z;
-    for (int i = 1; i <= object->number_of_vertices; ++i)
-    {
-        object->vertices[i].x += dx;
-        object->vertices[i].y += dy;
-        object->vertices[i].z += dz;
-    }
-}
-
-void swap_vertices(struct vertex_2d *A, struct vertex_2d *B)
-{
-    int xaux, yaux;
-    xaux = A->x;
-    A->x = B->x;
-    B->x = xaux;
-
-    yaux = A->y;
-    A->y = B->y;
-    B->y = yaux;
-
-    double aux;
-    aux = A->depth;
-    A->depth = B->depth;
-    B->depth = aux;
-}
-
-void set_draw_triangles(int should_draw_triangles_value)
-{
-    should_draw_triangles = should_draw_triangles_value;
-}
-
-void set_draw_vertices(int should_draw_vertices_value)
-{
-    should_draw_vertices = should_draw_vertices_value;
-}
-
-void set_shading_type(enum shading_type shading_type)
-{
-    current_shading_type = shading_type;
-}
-
-void set_draw_edges(int should_draw_edges_value)
-{
-    should_draw_edges = should_draw_edges_value;
-}
-
 double calculate_vertex_intensity(int vertex_index)
 {
-    // Assume `vertex_normals` array contains precomputed normals for each vertex
     struct vector_3d vertex_normal = vertex_normals[vertex_index];
-
-    // Normalize the vertex normal
-    double norm_length = sqrt(vertex_normal.x * vertex_normal.x + vertex_normal.y * vertex_normal.y + vertex_normal.z * vertex_normal.z);
-
-    // Dot product of light direction and vertex normal
     double intensity = light_direction.x * vertex_normal.x +
                        light_direction.y * vertex_normal.y +
                        light_direction.z * vertex_normal.z;
 
     if (intensity < 0)
-        intensity = 0; // Clamp intensity to 0 if it's negative
+        intensity = 0;
 
     return intensity;
 }
 
-void rasterize_triangle_with_intensities(struct vertex_2d v1, double i1,
-                                         struct vertex_2d v2, double i2,
-                                         struct vertex_2d v3, double i3,
-                                         struct color base_color)
-{
-    if (v1.y == v2.y && v1.y == v3.y)
-    {
-        return;
-    }
-    if (v1.y > v2.y)
-    {
-        swap_vertices(&v1, &v2);
-        double temp_intensity = i1;
-        i1 = i2;
-        i2 = temp_intensity; // Swap intensities as well
-    }
-    if (v1.y > v3.y)
-    {
-        swap_vertices(&v1, &v3);
-        double temp_intensity = i1;
-        i1 = i3;
-        i3 = temp_intensity; // Swap intensities as well
-    }
-    if (v2.y > v3.y)
-    {
-        swap_vertices(&v2, &v3);
-        double temp_intensity = i2;
-        i2 = i3;
-        i3 = temp_intensity; // Swap intensities as well
-    }
-
-    int total_height = v3.y - v1.y;
-    int first_segment_height = v2.y - v1.y;
-    int second_segment_height = v3.y - v2.y;
-
-    if (total_height == 0)
-    {
-        return;
-    }
-
-    int y_start = v1.y;
-
-    // Rasterize the first segment
-    for (int y_index = 0; y_index < first_segment_height; y_index++)
-    {
-        int y = y_start + y_index;
-        if (y <= y_viewpoint_min || y >= y_viewpoint_max)
-        {
-            continue;
-        }
-
-        double alpha = (double)(y_index) / total_height;
-        double beta = (double)(y_index) / first_segment_height;
-
-        int x_start = alpha * v3.x + v1.x * (1 - alpha);
-        double z_start = alpha * v3.depth + v1.depth * (1 - alpha);
-        double intensity_start = alpha * i3 + i1 * (1 - alpha); // Interpolate intensity
-
-        int x_end = beta * v2.x + v1.x * (1 - beta);
-        double z_end = beta * v2.depth + v1.depth * (1 - beta);
-        double intensity_end = beta * i2 + i1 * (1 - beta); // Interpolate intensity
-
-        if (x_start > x_end)
-        {
-            swap_integers(&x_start, &x_end);
-            double temp_intensity = intensity_start;
-            intensity_start = intensity_end;
-            intensity_end = temp_intensity;
-        }
-
-        rasterize_line_with_intensity(x_start, z_start, x_end, z_end, y, base_color, intensity_start, intensity_end);
-    }
-
-    // Rasterize the second segment
-    for (int y_index = first_segment_height; y_index < total_height; y_index++)
-    {
-        int y = y_start + y_index;
-        if (y <= y_viewpoint_min || y >= y_viewpoint_max)
-        {
-            continue;
-        }
-
-        double alpha = (float)(y_index) / total_height;
-        double beta = (float)(y_index - first_segment_height) / second_segment_height;
-
-        int x_start = alpha * v3.x + v1.x * (1 - alpha);
-        double z_start = alpha * v3.depth + v1.depth * (1 - alpha);
-        double intensity_start = alpha * i3 + i1 * (1 - alpha); // Interpolate intensity
-
-        int x_end = beta * v3.x + v2.x * (1 - beta);
-        double z_end = beta * v3.depth + v2.depth * (1 - beta);
-        double intensity_end = beta * i3 + i2 * (1 - beta); // Interpolate intensity
-
-        if (x_start > x_end)
-        {
-            swap_integers(&x_start, &x_end);
-            double temp_intensity = intensity_start;
-            intensity_start = intensity_end;
-            intensity_end = temp_intensity;
-        }
-
-        rasterize_line_with_intensity(x_start, z_start, x_end, z_end, y, base_color, intensity_start, intensity_end);
-    }
-}
-
-void rasterize_line_with_intensity(int x_start, double z_start, int x_end, double z_end, int y, struct color base_color,
-                                   double intensity_start, double intensity_end) // Add intensity interpolation
-{
-    int line_length = x_end - x_start;
-    double line_depth = z_end - z_start;
-    double line_intensity = intensity_end - intensity_start;
-
-    for (int x_index = 0; x_index <= line_length; x_index++)
-    {
-        int x = x_start + x_index;
-        if (x <= x_viewpoint_min || x >= x_viewpoint_max)
-        {
-            continue;
-        }
-
-        double phi = line_length == 0 ? 1.0 : (double)x_index / (double)line_length;
-        double z = z_start + line_depth * phi;                     // Interpolate z
-        double intensity = intensity_start + line_intensity * phi; // Interpolate intensity
-
-        if (z <= 0)
-        {
-            continue;
-        }
-
-        int pixel_index = x + x_viewpoint_range * y;
-        double current_z_value = zbuffer[pixel_index];
-        if (current_z_value <= z)
-        {
-            continue;
-        }
-
-        struct color pixel_color = {
-            base_color.r * intensity,
-            base_color.g * intensity,
-            base_color.b * intensity};
-
-        draw_pixel(x, y, pixel_color);
-        zbuffer[pixel_index] = z;
-    }
-}
-
-void calculate_vertex_normals(struct obj_triangle *triangles, int number_of_triangles, int number_of_vertices)
+void calculate_vertex_normals(struct wavefront_obj_triangle *triangles, int number_of_triangles, int number_of_vertices)
 {
     // Initialize all vertex normals to (0, 0, 0)
     for (int i = 1; i <= number_of_vertices; ++i)
@@ -873,7 +467,7 @@ void calculate_vertex_normals(struct obj_triangle *triangles, int number_of_tria
     // Calculate and add triangle normals to vertex normals
     for (int i = 0; i < number_of_triangles; ++i)
     {
-        struct obj_triangle triangle = triangles[i];
+        struct wavefront_obj_triangle triangle = triangles[i];
         struct vector_3d triangle_normal = triangle_vectors[i].norm;
 
         int vertex_a_idx = triangle.vertex_a;
@@ -897,14 +491,54 @@ void calculate_vertex_normals(struct obj_triangle *triangles, int number_of_tria
     // Normalize all vertex normals
     for (int i = 1; i <= number_of_vertices; ++i)
     {
-        double norm_length = sqrt(vertex_normals[i].x * vertex_normals[i].x +
-                                  vertex_normals[i].y * vertex_normals[i].y +
-                                  vertex_normals[i].z * vertex_normals[i].z);
-        if (norm_length > 0)
-        {
-            vertex_normals[i].x /= norm_length;
-            vertex_normals[i].y /= norm_length;
-            vertex_normals[i].z /= norm_length;
-        }
+        normalize_vector(&vertex_normals[i]);
     }
+}
+
+double calculate_camera_distance(struct wavefront_obj object)
+{
+    double fov = 30;
+    double fov_radians = DEG_TO_RAD(fov);
+    double largest_dimension = sqrt(SQR(object.x_max - object.x_min) + SQR(object.y_max - object.y_min) + SQR(object.z_max - object.z_min));
+    return largest_dimension / (2 * tan(fov_radians / 2));
+}
+
+void set_scale(float scale_multiplier)
+{
+    scale = initial_scale * scale_multiplier;
+}
+
+int get_camera_distance()
+{
+    return camera_distance;
+}
+
+void set_colors(int background_color, struct color color, struct color edge_color)
+{
+    current_color = color;
+    current_edge_color = edge_color;
+    current_background_color = background_color;
+}
+
+void move_obj_relative(int dx_value, int dy_value)
+{
+    dx += dx_value;
+    dy += dy_value;
+}
+
+void set_shading_type(enum shading_type shading_type)
+{
+    current_shading_type = shading_type;
+}
+
+void set_cartesian_translation(double alpha_value, double beta_value, double gamma_value)
+{
+    alpha = alpha_value;
+    beta = beta_value;
+    gamma = gamma_value;
+}
+
+void set_camera_distance(int value)
+{
+    camera_distance = value;
 }
