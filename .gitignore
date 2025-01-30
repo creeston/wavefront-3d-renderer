@@ -3,3 +3,4 @@ app
 build
 *.o
 resources.c
+*.obj
