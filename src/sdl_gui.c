@@ -103,7 +103,16 @@ void set_shading(enum shading_type shading_type_value)
     set_shading_type(shading_type_value);
 }
 
+void set_camera_distance_value(int value)
+{
+    set_camera_distance(value);
+}
+
+#if WASM
+void main_loop()
+#else
 int main_loop()
+#endif
 {
     SDL_Event event;
     while (SDL_PollEvent(&event))
@@ -112,8 +121,9 @@ int main_loop()
         {
 #if WASM
             emscripten_cancel_main_loop();
-#endif
+#else
             return 0;
+#endif
         }
         else if (event.type == SDL_WINDOWEVENT)
         {
@@ -190,7 +200,9 @@ int main_loop()
         SDL_RenderPresent(renderer);
     }
 
+#if !WASM
     return 1;
+#endif
 }
 
 void init_gui(struct arguments arguments, int argc, char **argv)
@@ -222,11 +234,13 @@ void init_gui(struct arguments arguments, int argc, char **argv)
         return;
     }
 
+#if !WASM
     if (arguments.width > display_mode.w || arguments.height > display_mode.h)
     {
         fprintf(stderr, "Canvas dimensions are larger than the screen.\n");
         return;
     }
+#endif
 
     window = SDL_CreateWindow("Wavefront 3D Viewer", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, arguments.width, arguments.height, SDL_WINDOW_OPENGL);
     if (!window)

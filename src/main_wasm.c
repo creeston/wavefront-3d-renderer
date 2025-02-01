@@ -73,6 +73,11 @@ void set_shading_callback(char *shading_type_value)
     }
 }
 
+void set_camera_distance_callback(int distance)
+{
+    set_camera_distance_value(distance);
+}
+
 int main(int argc, char **argv)
 {
     EM_ASM({

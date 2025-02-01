@@ -4,7 +4,6 @@
 <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <link rel="stylesheet" href="https://unpkg.com/picocss@1.5.7/dist/pico.min.css">
     <link rel="stylesheet" href="https://unpkg.com/98.css">
 
     <style>
@@ -28,6 +27,25 @@
             align-items: center;
         }
 
+        #render-window {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+        }
+
+        #help-window {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 200px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+        }
+
         #canvas {
             width: 100%;
             height: 100%;
@@ -38,9 +56,8 @@
 <body>
 
     <div id="sidebar">
-        <h2>Wavefront .obj renderer</h2>
-        <button id="uploadButton">Upload File</button>
-        <br><br>
+        <button id="uploadButton">Load Model</button>
+        <p>or</p>
         <label for="modelSelect">Choose Model:</label>
         <select id="modelSelect" style="width: 100%;">
         </select>
@@ -63,8 +80,32 @@
         <input type="range" id="cameraDistance" min="75" max="5000" value="1000">
     </div>
 
-    <div id="canvas-container">
-        <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+    <div class="window" id="render-window">
+        <div class="title-bar">
+            <div class="title-bar-text">Wavefront .obj renderer</div>
+            <div class="title-bar-controls">
+                <button aria-label="Help" id="render-window-help-button"></button>
+            </div>
+        </div>
+        <div class="window-body" id="canvas-container">
+            <canvas id="canvas" oncontextmenu="event.preventDefault()">
+            </canvas>
+
+            <div class="window" id="help-window">
+                <div class="title-bar">
+                    <div class="title-bar-controls">
+                        <button aria-label="Close" id="help-window-close-button"></button>
+                    </div>
+                </div>
+                <div class="window-body">
+                    <p>Left mouse click and drag to rotate the model around X and Y axes</p>
+                    <p>Right mouse click and drag to rotate the model around Z axis</p>
+                    <p>Scroll to zoom in and out.</p>
+                    <p>Use shading radio buttons to switch between shading modes.</p>
+                    <p>Use the camera distance slider to adjust the distance of the camera from the model.</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
@@ -73,26 +114,6 @@
         var Module = {
             canvas: (function () { return document.getElementById('canvas'); })()
         };
-
-        document.getElementById('uploadButton').addEventListener('click', function () {
-            var url = prompt("Enter the URL of the .obj file to load:");
-            if (url) {
-                ccall('load_file', 'void', ['string'], [url]);
-            }
-        });
-
-        $('#radio_flat').on('change', function () {
-            ccall('set_shading_callback', 'void', ['string'], ['flat']);
-        });
-
-        $('#ratio_gouraud').on('change', function () {
-            ccall('set_shading_callback', 'void', ['string'], ['gouraud']);
-        });
-
-        document.getElementById('cameraDistance').addEventListener('input', function () {
-            var distance = this.value;
-            ccall('set_camera_distance', 'void', ['number'], [distance]);
-        });
 
         $(document).ready(function () {
             fetch('https://api.github.com/repos/alecjacobson/common-3d-test-models/contents/data')
@@ -113,18 +134,44 @@
                 var url = $(this).val();
                 ccall('load_file', 'void', ['string'], [url]);
             });
-        });
 
-        // Subscribe to window resize event
-        window.addEventListener('resize', function () {
-            var width = window.innerWidth;
-            var height = window.innerHeight;
-            ccall('on_window_resize', 'void', ['number', 'number'], [width, height]);
+            $('#render-window-help-button').on('click', function () {
+                $('#help-window').toggle();
+            });
+
+            $('#help-window-close-button').on('click', function () {
+                $('#help-window').hide();
+            });
+
+            $('#radio_flat').on('change', function () {
+                ccall('set_shading_callback', 'void', ['string'], ['flat']);
+            });
+
+            $('#ratio_gouraud').on('change', function () {
+                ccall('set_shading_callback', 'void', ['string'], ['gouraud']);
+            });
+
+            $('#uploadButton').on('click', function () {
+                var url = prompt("Enter the URL of the .obj file to load:");
+                if (url) {
+                    ccall('load_file', 'void', ['string'], [url]);
+                }
+            });
+
+            $('#cameraDistance').on('input', function () {
+                var distance = this.value;
+                ccall('set_camera_distance_callback', 'void', ['number'], [distance]);
+            });
+
+            // Subscribe to window resize event
+            $(window).on('resize', function () {
+                var width = window.innerWidth;
+                var height = window.innerHeight;
+                ccall('on_window_resize', 'void', ['number', 'number'], [width, height]);
+            });
         });
     </script>
-
     <script src="index.js"></script>
-
 </body>
 
 </html>

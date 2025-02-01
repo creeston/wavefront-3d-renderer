@@ -19,7 +19,9 @@ SDL_TARGET = app-sdl
 # SDL WASM target
 SDL_WASM_TARGET = app-web
 SDL_WASM_SRCS = src/main_wasm.c src/sdl_gui.c src/sdl_drawing.c $(SRCS_COMMON)
-SDL_WASM_FLAGS = -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2 -s USE_SDL_NET=2 -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s FORCE_FILESYSTEM=1 -s DEFAULT_LIBRARY_FUNCS_TO_INCLUDE='$$ccall' -s EXPORTED_FUNCTIONS='["_main", "_file_loaded", "_load_file", "_on_window_resize", "_init_ui"]'
+SDL_WASM_EXPORTED_FUNCTIONS = ["_main", "_file_loaded", "_load_file", "_on_window_resize", "_init_ui", "_set_shading_callback", "_set_camera_distance_callback"]
+SDL_WASM_FLAGS = -DWASM -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_TTF=2 -s USE_SDL_NET=2 -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s FORCE_FILESYSTEM=1 -s DEFAULT_LIBRARY_FUNCS_TO_INCLUDE='$$ccall' -s EXPORTED_FUNCTIONS='$(SDL_WASM_EXPORTED_FUNCTIONS)'
+
 
 all: $(GTK_TARGET) $(SDL_TARGET) $(SDL_WASM_TARGET)
 
