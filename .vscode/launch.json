@@ -5,11 +5,11 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run",
+            "name": "Run GTK App",
             "type": "cppdbg",
             "request": "launch",
-            "preLaunchTask": "Build C App",
-            "program": "${workspaceFolder}/app",
+            "preLaunchTask": "Build GTK App",
+            "program": "${workspaceFolder}/app_gtk",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
@@ -28,7 +28,34 @@
                     "ignoreFailures": true
                 }
             ]
+        },
+        {
+            "name": "Run SDL App",
+            "type": "cppdbg",
+            "request": "launch",
+            "preLaunchTask": "Build SDL App",
+            "program": "${workspaceFolder}/app_sdl",
+            "args": [
+                "--file",
+                "objects/head.obj"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
         }
-
     ]
 }

@@ -38,7 +38,13 @@
         "wavefront_object_reader.h": "c",
         "models.h": "c",
         "gui.h": "c",
-        "drawing.h": "c"
+        "drawing.h": "c",
+        "sdl.h": "c",
+        "sdl_drawing.h": "c",
+        "gtk_drawing.h": "c",
+        "gio.h": "c",
+        "emscripten.h": "c",
+        "sdl_wasm_gui.h": "c"
     },
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "ms-vscode.cpptools"
