@@ -33,7 +33,7 @@ $(SDL_TARGET): $(SDL_SRCS:.c=.o)
 
 $(SDL_WASM_TARGET):
 	$(EMCC) $(SDL_WASM_SRCS) -o docs/index.html $(SDL_WASM_FLAGS)
-	cp minimal_index.html docs/index.html
+	cp resources/gui.html docs/index.html
 
 # Compile source files into object files
 %.o: %.c
