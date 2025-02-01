@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <link rel="stylesheet" href="https://unpkg.com/picocss@1.5.7/dist/pico.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/98.css">
+
+    <style>
+        body {
+            display: flex;
+            height: 100vh;
+            margin: 0;
+        }
+
+        #sidebar {
+            width: 300px;
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-right: 1px solid #dee2e6;
+        }
+
+        #canvas-container {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="sidebar">
+        <h2>Wavefront .obj renderer</h2>
+        <button id="uploadButton">Upload File</button>
+        <br><br>
+        <label for="modelSelect">Choose Model:</label>
+        <select id="modelSelect" style="width: 100%;">
+        </select>
+        <small>Source: <a href="https://github.com/alecjacobson/common-3d-test-models"
+                target="_blank">https://github.com/alecjacobson/common-3d-test-models</a></small>
+        <br><br>
+        <fieldset id="shading-fieldset">
+            <div class="field-row">Shading:</div>
+            <div class="field-row">
+                <input id="radio_flat" type="radio" name="fieldset-example" checked>
+                <label for="radio_flat">Flat</label>
+            </div>
+            <div class="field-row">
+                <input id="ratio_gouraud" type="radio" name="fieldset-example">
+                <label for="ratio_gouraud">Gouraud</label>
+            </div>
+        </fieldset>
+        <br><br>
+        <label for="cameraDistance">Camera Distance:</label>
+        <input type="range" id="cameraDistance" min="75" max="5000" value="1000">
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script type='text/javascript'>
+        var Module = {
+            canvas: (function () { return document.getElementById('canvas'); })()
+        };
+
+        document.getElementById('uploadButton').addEventListener('click', function () {
+            var url = prompt("Enter the URL of the .obj file to load:");
+            if (url) {
+                ccall('load_file', 'void', ['string'], [url]);
+            }
+        });
+
+        $('#radio_flat').on('change', function () {
+            ccall('set_shading_callback', 'void', ['string'], ['flat']);
+        });
+
+        $('#ratio_gouraud').on('change', function () {
+            ccall('set_shading_callback', 'void', ['string'], ['gouraud']);
+        });
+
+        document.getElementById('cameraDistance').addEventListener('input', function () {
+            var distance = this.value;
+            ccall('set_camera_distance', 'void', ['number'], [distance]);
+        });
+
+        $(document).ready(function () {
+            fetch('https://api.github.com/repos/alecjacobson/common-3d-test-models/contents/data')
+                .then(response => response.json())
+                .then(data => {
+                    var models = data.filter(file => file.size < 3334529).map(file => file.name).filter(name => name.endsWith('.obj'));
+                    models.forEach(function (model) {
+                        var option = new Option(model, "https://raw.githubusercontent.com/alecjacobson/common-3d-test-models/master/data/" + model);
+                        $('#modelSelect').append(option);
+                    });
+
+                    $('#modelSelect').val(null);
+
+                })
+                .catch(error => console.error('Error fetching model list:', error));
+
+            $("#modelSelect").change(function () {
+                var url = $(this).val();
+                ccall('load_file', 'void', ['string'], [url]);
+            });
+        });
+
+        // Subscribe to window resize event
+        window.addEventListener('resize', function () {
+            var width = window.innerWidth;
+            var height = window.innerHeight;
+            ccall('on_window_resize', 'void', ['number', 'number'], [width, height]);
+        });
+    </script>
+
+    <script src="index.js"></script>
+
+</body>
+
+</html>
