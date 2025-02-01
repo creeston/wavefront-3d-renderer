@@ -5,7 +5,6 @@
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <link rel="stylesheet" href="https://unpkg.com/picocss@1.5.7/dist/pico.min.css">
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://unpkg.com/98.css">
 
     <style>
@@ -48,9 +47,17 @@
         <small>Source: <a href="https://github.com/alecjacobson/common-3d-test-models"
                 target="_blank">https://github.com/alecjacobson/common-3d-test-models</a></small>
         <br><br>
-        <label for="shadingSelect">Shading:</label>
-        <select id="shadingSelect" style="width: 100%;">
-        </select>
+        <fieldset id="shading-fieldset">
+            <div class="field-row">Shading:</div>
+            <div class="field-row">
+                <input id="radio_flat" type="radio" name="fieldset-example" checked>
+                <label for="radio_flat">Flat</label>
+            </div>
+            <div class="field-row">
+                <input id="ratio_gouraud" type="radio" name="fieldset-example">
+                <label for="ratio_gouraud">Gouraud</label>
+            </div>
+        </fieldset>
         <br><br>
         <label for="cameraDistance">Camera Distance:</label>
         <input type="range" id="cameraDistance" min="75" max="5000" value="1000">
@@ -74,9 +81,12 @@
             }
         });
 
-        document.getElementById('shadingSelect').addEventListener('change', function () {
-            var shadingType = this.value;
-            ccall('set_shading_callback', 'void', ['string'], [shadingType]);
+        $('#radio_flat').on('change', function () {
+            ccall('set_shading_callback', 'void', ['string'], ['flat']);
+        });
+
+        $('#ratio_gouraud').on('change', function () {
+            ccall('set_shading_callback', 'void', ['string'], ['gouraud']);
         });
 
         document.getElementById('cameraDistance').addEventListener('input', function () {
@@ -84,17 +94,7 @@
             ccall('set_camera_distance', 'void', ['number'], [distance]);
         });
 
-        // Initialize Select2
         $(document).ready(function () {
-            $('#modelSelect').select2({
-                placeholder: "Select a model",
-            });
-
-            $('#modelSelect').on('select2:select', function (e) {
-                var url = e.params.data.id;
-                ccall('load_file', 'void', ['string'], [url]);
-            });
-
             fetch('https://api.github.com/repos/alecjacobson/common-3d-test-models/contents/data')
                 .then(response => response.json())
                 .then(data => {
@@ -104,23 +104,14 @@
                         $('#modelSelect').append(option);
                     });
 
-                    // Do not select a model by default
                     $('#modelSelect').val(null);
 
                 })
                 .catch(error => console.error('Error fetching model list:', error));
 
-            $('#shadingSelect').select2({
-                placeholder: "Select a shading type",
-                data: [
-                    { id: 'flat', text: 'Flat' },
-                    { id: 'gouraud', text: 'Gouraud' },
-                ]
-            });
-
-            $('#shadingSelect').on('select2:select', function (e) {
-                var shadingType = e.params.data.id;
-                ccall('set_shading_callback', 'void', ['string'], [shadingType]);
+            $("#modelSelect").change(function () {
+                var url = $(this).val();
+                ccall('load_file', 'void', ['string'], [url]);
             });
         });
 
