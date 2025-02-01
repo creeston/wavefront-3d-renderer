@@ -44,7 +44,9 @@
         "gtk_drawing.h": "c",
         "gio.h": "c",
         "emscripten.h": "c",
-        "sdl_wasm_gui.h": "c"
+        "sdl_wasm_gui.h": "c",
+        "array": "c",
+        "tuple": "c"
     },
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "ms-vscode.cpptools"

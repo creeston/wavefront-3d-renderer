@@ -5,6 +5,7 @@
 #include "../include/gui.h"
 #include "../include/models.h"
 #include "../include/sdl_wasm_gui.h"
+#include "../include/renderer.h"
 
 const char *argp_program_version = "wavefront-obj-renderer 1.0";
 const char *argp_program_bug_address = "<mityy2012@gmail.com>";
@@ -41,6 +42,14 @@ void load_file(const char *url)
 void file_loaded(char *filename)
 {
     set_file(filename);
+
+    int camera_distance = get_camera_distance();
+
+    EM_ASM({
+        let camera_distance = $0;
+        let camera_distance_max = camera_distance * 2;
+        let camera_distance_min = camera_distance / 2; 
+        onFileLoaded(camera_distance, camera_distance_max, camera_distance_min); }, camera_distance);
 }
 
 void init_ui(int width, int height)

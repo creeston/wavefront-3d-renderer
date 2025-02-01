@@ -5,6 +5,7 @@
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <link rel="stylesheet" href="https://unpkg.com/98.css">
+    <link rel="icon" type="image/png" href="favicon.png">
 
     <style>
         body {
@@ -16,7 +17,7 @@
         #sidebar {
             width: 300px;
             padding: 1rem;
-            background-color: #f8f9fa;
+            background-color: silver;
             border-right: 1px solid #dee2e6;
         }
 
@@ -50,22 +51,29 @@
             width: 100%;
             height: 100%;
         }
+
+        #scaling-fieldset {
+            display: none;
+        }
     </style>
 </head>
 
 <body>
-
-    <div id="sidebar">
-        <button id="uploadButton">Load Model</button>
-        <p>or</p>
-        <label for="modelSelect">Choose Model:</label>
-        <select id="modelSelect" style="width: 100%;">
-        </select>
-        <small>Source: <a href="https://github.com/alecjacobson/common-3d-test-models"
-                target="_blank">https://github.com/alecjacobson/common-3d-test-models</a></small>
-        <br><br>
+    <div id="sidebar" class="window">
+        <fieldset>
+            <legend>3D model</legend>
+            <div class="field-row">
+                <select id="model-select" style="width: 100%;">
+                </select>
+            </div>
+            <div class="field-row">
+                <small>Source: <a href="https://github.com/alecjacobson/common-3d-test-models"
+                        target="_blank">https://github.com/alecjacobson/common-3d-test-models</a></small>
+            </div>
+        </fieldset>
+        <br>
         <fieldset id="shading-fieldset">
-            <div class="field-row">Shading:</div>
+            <legend>Shading</legend>
             <div class="field-row">
                 <input id="radio_flat" type="radio" name="fieldset-example" checked>
                 <label for="radio_flat">Flat</label>
@@ -75,9 +83,16 @@
                 <label for="ratio_gouraud">Gouraud</label>
             </div>
         </fieldset>
-        <br><br>
-        <label for="cameraDistance">Camera Distance:</label>
-        <input type="range" id="cameraDistance" min="75" max="5000" value="1000">
+        <br>
+        <fieldset id="scaling-fieldset">
+            <legend>Scaling</legend>
+            <div class="field-row">
+                <label for="camera-distance">Camera Distance:</label>
+            </div>
+            <div class="field-row">
+                <input type="range" id="camera-distance" min="75" max="5000" value="1000">
+            </div>
+        </fieldset>
     </div>
 
     <div class="window" id="render-window">
@@ -103,13 +118,17 @@
                     <p>Scroll to zoom in and out.</p>
                     <p>Use shading radio buttons to switch between shading modes.</p>
                     <p>Use the camera distance slider to adjust the distance of the camera from the model.</p>
+
+                    <small>
+                        <p>Source code: <a href="https://github.com/creeston/wavefront-3d-renderer"
+                                target="_blank">https://github.com/creeston/wavefront-3d-renderer</a>
+                    </small>
                 </div>
             </div>
         </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script type='text/javascript'>
         var Module = {
             canvas: (function () { return document.getElementById('canvas'); })()
@@ -122,15 +141,15 @@
                     var models = data.filter(file => file.size < 3334529).map(file => file.name).filter(name => name.endsWith('.obj'));
                     models.forEach(function (model) {
                         var option = new Option(model, "https://raw.githubusercontent.com/alecjacobson/common-3d-test-models/master/data/" + model);
-                        $('#modelSelect').append(option);
+                        $('#model-select').append(option);
                     });
 
-                    $('#modelSelect').val(null);
+                    $('#model-select').val(null);
 
                 })
                 .catch(error => console.error('Error fetching model list:', error));
 
-            $("#modelSelect").change(function () {
+            $("#model-select").change(function () {
                 var url = $(this).val();
                 ccall('load_file', 'void', ['string'], [url]);
             });
@@ -158,18 +177,26 @@
                 }
             });
 
-            $('#cameraDistance').on('input', function () {
+            $('#camera-distance').val(0)
+
+            $('#camera-distance').on('input', function () {
                 var distance = this.value;
                 ccall('set_camera_distance_callback', 'void', ['number'], [distance]);
             });
 
-            // Subscribe to window resize event
             $(window).on('resize', function () {
                 var width = window.innerWidth;
                 var height = window.innerHeight;
                 ccall('on_window_resize', 'void', ['number', 'number'], [width, height]);
             });
         });
+
+        function onFileLoaded(camera_distance, max_distance, min_distance) {
+            $('#camera-distance').attr('max', max_distance);
+            $('#camera-distance').attr('min', min_distance);
+            $('#camera-distance').val(camera_distance);
+            $('#scaling-fieldset').show();
+        }
     </script>
     <script src="index.js"></script>
 </body>

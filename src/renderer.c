@@ -221,7 +221,8 @@ void calculate_scale(struct vector_3d *vertices, int number_of_vertices)
     double fx = x_viewpoint_range / x_range;
     double fy = y_viewpoint_range / y_range;
 
-    scale = fy;
+    scale = fy > fx ? fx : fy;
+    scale = scale * 0.8; // 80% of the screen
     initial_scale = scale;
 }
 

@@ -60,6 +60,15 @@ void resize_canvas(int width, int height)
     initialize_renderer();
 }
 
+void reset_all_values()
+{
+    current_x_alpha = 0;
+    current_y_beta = 0;
+    current_z_gamma = 0;
+    current_scale_value = DEFAULT_SCALE_VALUE;
+    update_rotation_angles();
+}
+
 void show_warning_dialog(const char *message)
 {
     int res = SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "Warning", message, window);
@@ -95,7 +104,13 @@ void set_file(const char *url)
 
     object_to_render = new_object;
     set_object_to_render(object_to_render);
+    reset_all_values();
     initialize_renderer();
+}
+
+int get_camera_distance_value()
+{
+    return get_camera_distance();
 }
 
 void set_shading(enum shading_type shading_type_value)
