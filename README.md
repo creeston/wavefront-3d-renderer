@@ -1,6 +1,6 @@
 # Wavefront 3D Viewer
 
-[![Website](https://img.shields.io/badge/Demo-Online-green)](https://creeston.github.io/wavefront-3d-renderer/)
+[![Website](https://img.shields.io/badge/Demo-Online-green)](https://creeston.github.io/wavefront-3d-renderer/){:target="_blank"}
 
 Wavefront 3D Viewer is a C application designed for rendering 3D objects from Wavefront .obj file format. This application allows users to rotate, scale, and choose between different shading types. This project was created for educational purposes to demonstrate the fundamentals of 3D rendering and manipulation.
 
