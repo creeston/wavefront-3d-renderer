@@ -9,7 +9,9 @@ static char doc[] = "Wavefront 3D OBJ Renderer -- A program to render 3D objects
 static char args_doc[] = "";
 
 static struct argp_option options[] = {
-    {"file", 'f', "FILE", 0, "Path to the Wavefront .obj file"},
+    {"file", 'f', "FILE", 0, "Path to the Wavefront .obj file [REQUIRED]"},
+    {"width", 'w', "WIDTH", 0, "Width of the canvas [DEFAULT: 800]"},
+    {"height", 'h', "HEIGHT", 0, "Height of the canvas [DEFAULT: 600]"},
     {0}};
 
 static error_t parse_opt(int key, char *arg, struct argp_state *state)
@@ -21,6 +23,12 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
     case 'f':
         arguments->file = arg;
         break;
+    case 'w':
+        arguments->width = atoi(arg);
+        break;
+    case 'h':
+        arguments->height = atoi(arg);
+        break;
     case ARGP_KEY_ARG:
         if (state->arg_num > 0)
         {
@@ -28,9 +36,10 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
         }
         break;
     case ARGP_KEY_END:
-        if (state->arg_num < 0)
+        if (state->arg_num < 0 || !arguments->file)
         {
-            argp_usage(state);
+            argp_failure(state, 1, 0, "required --file. See --help for more information");
+            exit(ARGP_ERR_UNKNOWN);
         }
         break;
     default:
@@ -46,6 +55,8 @@ int main(int argc, char **argv)
     struct arguments arguments;
 
     arguments.file = NULL;
+    arguments.height = 600;
+    arguments.width = 800;
 
     argp_parse(&argp, argc, argv, 0, 0, &arguments);
 

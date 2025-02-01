@@ -82,8 +82,8 @@ void set_object_to_render(struct wavefront_obj object)
     int number_of_vertices = current_object.number_of_vertices;
     int number_of_triangles = current_object.number_of_triangles;
 
-    vertices = (struct vector_3d *)malloc((number_of_vertices + 1) * sizeof(struct vector_3d));
-    vertex_normals = (struct vector_3d *)malloc((number_of_vertices + 1) * sizeof(struct vector_3d));
+    vertices = (struct vector_3d *)malloc(number_of_vertices * sizeof(struct vector_3d));
+    vertex_normals = (struct vector_3d *)malloc(number_of_vertices * sizeof(struct vector_3d));
     triangle_vectors = (struct triangle_vector *)malloc(number_of_triangles * sizeof(struct triangle_vector));
 
     camera_distance = calculate_camera_distance(current_object);
@@ -175,7 +175,7 @@ void initialize_z_buffer()
 
 void calculate_rotated_vertices(struct wavefront_obj_vertex *object_vertices, int number_of_vertices)
 {
-    for (int i = 1; i <= number_of_vertices; ++i)
+    for (int i = 0; i < number_of_vertices; ++i)
     {
         vertices[i] = rotate_vertex(object_vertices[i]);
     }
@@ -191,7 +191,7 @@ void calculate_scale(struct vector_3d *vertices, int number_of_vertices)
 
     double x_min = BIG_INT, x_max = -BIG_INT, y_min = BIG_INT, y_max = -BIG_INT;
 
-    for (int i = 1; i <= number_of_vertices; i++)
+    for (int i = 0; i < number_of_vertices; i++)
     {
         struct vector_3d rotated_vertex = vertices[i];
         double x = rotated_vertex.x / rotated_vertex.z;
@@ -457,7 +457,7 @@ double calculate_vertex_intensity(int vertex_index)
 void calculate_vertex_normals(struct wavefront_obj_triangle *triangles, int number_of_triangles, int number_of_vertices)
 {
     // Initialize all vertex normals to (0, 0, 0)
-    for (int i = 1; i <= number_of_vertices; ++i)
+    for (int i = 0; i < number_of_vertices; ++i)
     {
         vertex_normals[i].x = 0;
         vertex_normals[i].y = 0;
@@ -489,7 +489,7 @@ void calculate_vertex_normals(struct wavefront_obj_triangle *triangles, int numb
     }
 
     // Normalize all vertex normals
-    for (int i = 1; i <= number_of_vertices; ++i)
+    for (int i = 0; i < number_of_vertices; ++i)
     {
         normalize_vector(&vertex_normals[i]);
     }

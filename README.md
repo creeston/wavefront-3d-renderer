@@ -30,6 +30,7 @@ Model used in the screenshot: [Cat v1](https://free3d.com/3d-model/cat-v1--52228
 ```sh
 sudo apt-get install libgtk-3-dev
 sudo apt-get install glade
+sudo apt-get install libsdl2-dev // for SDL2
 ```
 
 To install debugger
@@ -83,6 +84,7 @@ to start the application with a specific .obj file.
 ## Source for 3D Objects
 
 - [Free 3D](https://free3d.com/)
+- [alecjacobson/common-3d-test-models](https://github.com/alecjacobson/common-3d-test-models)
 
 ## License
 This project is licensed under the MIT License.

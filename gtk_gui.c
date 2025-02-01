@@ -1,16 +1,16 @@
 #include <gtk/gtk.h>
 #include <math.h>
 
-#include "../include/gui.h"
-#include "../include/renderer.h"
-#include "../include/utils.h"
-#include "../include/wavefront_object_reader.h"
-#include "../include/gtk_drawing.h"
+#include "gtk_gui.h"
+#include "renderer.h"
+#include "utils.h"
+#include "wavefront_object_reader.h"
+#include "gtk_drawing.h"
 
 const struct color GREY = {200, 200, 200};
 const struct color WHITE = {255, 255, 255};
-const int BLACK_BACKGROUND = 0x00000000;
 
+const int BLACK_BACKGROUND = 0x00000000;
 const int MAX_NUMBER_OF_TRIANGLES = 100000;
 const int RENDER_INTERVAL_MS = 16;
 const int DEFAULT_SCALE_VALUE = 50;
@@ -78,7 +78,7 @@ void init_gui(struct arguments arguments, int argc, char **argv)
     gtk_init(&argc, &argv);
 
     builder = gtk_builder_new();
-    gtk_builder_add_from_resource(builder, "/com/creeston/wavefront-3d-renderer/resources/gui.glade", NULL);
+    gtk_builder_add_from_resource(builder, "/com/creeston/wavefront-3d-renderer/gui.glade", NULL);
     window = GTK_WIDGET(gtk_builder_get_object(builder, "window"));
     gtk_builder_connect_signals(builder, NULL);
 
@@ -114,11 +114,6 @@ void init_gui(struct arguments arguments, int argc, char **argv)
 
     (void)g_timeout_add(RENDER_INTERVAL_MS, (GSourceFunc)render_timer, global_canvas);
     gtk_main();
-}
-
-void cleanup_gui()
-{
-    // Do nothing for now, cleanup is handled in on_window_destroy
 }
 
 gboolean drawing_area_configure_event_cb(GtkWidget *widget, GdkEventConfigure *event, gpointer data)
@@ -386,4 +381,22 @@ int update_active_object(struct wavefront_obj new_object)
     start_fps_measurement = clock();
 
     return TRUE;
+}
+
+void destroy_object(struct wavefront_obj object)
+{
+    if (object.vertices != NULL)
+    {
+        free(object.vertices);
+    }
+
+    if (object.triangles != NULL)
+    {
+        free(object.triangles);
+    }
+
+    object.vertices = NULL;
+    object.triangles = NULL;
+    object.number_of_triangles = 0;
+    object.number_of_vertices = 0;
 }

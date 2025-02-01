@@ -19,20 +19,20 @@ int read_object(const char *filename, struct wavefront_obj *object)
 {
     if (!filename || !object)
     {
-        fprintf(stderr, "Invalid arguments to read_object\n");
-        exit(EXIT_FAILURE);
+        printf("Invalid arguments to read_object\n");
+        return 0;
     }
 
     FILE *file = fopen(filename, "r");
     if (!file)
     {
-        perror("Error opening file");
-        exit(EXIT_FAILURE);
+        printf("Error opening file %s\n", filename);
+        return 0;
     }
 
     struct wavefront_obj_vertex *vertices = NULL;
     struct wavefront_obj_triangle *triangles = NULL;
-    int vertex_count = 1, triangle_count = 0;
+    int vertex_count = 0, triangle_count = 0;
 
     char line[LINE_BUFFER_SIZE];
 
@@ -78,7 +78,7 @@ int read_object(const char *filename, struct wavefront_obj *object)
 
     double xmin = BIG, ymin = BIG, zmin = BIG, xmax = -BIG, ymax = -BIG, zmax = -BIG;
 
-    for (int i = 1; i < object->number_of_vertices; i++)
+    for (int i = 0; i < object->number_of_vertices; i++)
     {
         double x = object->vertices[i].x;
         double y = object->vertices[i].y;
@@ -114,16 +114,12 @@ int read_object(const char *filename, struct wavefront_obj *object)
     double y_origin = (ymin + ymax) / 2;
     double z_origin = (zmin + zmax) / 2;
 
-    for (int i = 1; i < object->number_of_vertices; i++)
+    for (int i = 0; i < object->number_of_vertices; i++)
     {
         object->vertices[i].x -= x_origin;
         object->vertices[i].y -= y_origin;
         object->vertices[i].z -= z_origin;
     }
-
-    object->vertices[0].x = 0;
-    object->vertices[0].y = 0;
-    object->vertices[0].z = 0;
 
     object->x_min = xmin;
     object->x_max = xmax;
@@ -155,12 +151,9 @@ void read_vertex(char *line, struct wavefront_obj_vertex **vertices, int *vertex
     y *= SCALING_FACTOR;
     z *= SCALING_FACTOR;
 
-    if (*vertex_count == 1)
+    if (*vertex_count == 0)
     {
-        *vertices = (struct wavefront_obj_vertex *)malloc(2 * sizeof(struct wavefront_obj_vertex));
-        (*vertices)[0].x = 0;
-        (*vertices)[0].y = 0;
-        (*vertices)[0].z = 0;
+        *vertices = (struct wavefront_obj_vertex *)malloc(1 * sizeof(struct wavefront_obj_vertex));
     }
     else
     {
@@ -175,7 +168,7 @@ void read_vertex(char *line, struct wavefront_obj_vertex **vertices, int *vertex
 
     (*vertices)[*vertex_count].x = -x;
     (*vertices)[*vertex_count].y = -y;
-    (*vertices)[*vertex_count].z = -z; // TODO ?
+    (*vertices)[*vertex_count].z = -z;
     (*vertex_count)++;
 }
 
@@ -200,7 +193,7 @@ void read_face(char *line, struct wavefront_obj_triangle **triangles, int *trian
         {
             break;
         }
-        poly_indices[vertex_count] = vertex_index;
+        poly_indices[vertex_count] = vertex_index - 1;
         vertex_triple = strtok(NULL, separator);
         vertex_count++;
     }
@@ -268,4 +261,22 @@ int validate_object(struct wavefront_obj *object)
     }
 
     return 1;
+}
+
+void destroy_object(struct wavefront_obj object)
+{
+    if (object.vertices != NULL)
+    {
+        free(object.vertices);
+    }
+
+    if (object.triangles != NULL)
+    {
+        free(object.triangles);
+    }
+
+    object.vertices = NULL;
+    object.triangles = NULL;
+    object.number_of_triangles = 0;
+    object.number_of_vertices = 0;
 }
